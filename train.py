@@ -180,10 +180,9 @@ def main():
     with open('config.yaml') as f: # reads .yml/.yaml files
         config = yaml.safe_load(f)
     
-    dataset_df = create_dataset_csv(config["data"]["images_dir"], 
-                                    config["data"]["right_masks_dir"],
-                                    config["data"]["left_masks_dir"],
-                                    config["data"]["data_csv"])
+    dataset_df = create_dataset_csv(config["data"]["frame"], 
+                                    config["data"]["vasselness"])
+                              
 
     dataset_df = split_dataset(dataset_df, split_per=config['data']['split_per'], seed=1)
     dataset_df.head(3)
