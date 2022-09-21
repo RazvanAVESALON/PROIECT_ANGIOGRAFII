@@ -1,6 +1,7 @@
 data:
-  frame: "D:\ai intro\Angiografii\20100131_114101_planeA\frame_extractor_frames.npz"
-  vasselness: "D:\ai intro\Angiografii\20100131_114101_planeA\vesselness_heatmaps.npz"
+  frame: "D:\\ai intro\\Angiografii\\20100131_114101_plane\\frame_extractor_frames.npz"
+  vasselness: "D:\\ai intro\\Angiografii\\20100131_114101_plane\\vesselness_heatmaps.npz"
+  annotation: clipping_points.json
   img_size: [128,128]
   split_per:
     train: 0.8
@@ -12,5 +13,6 @@ train:
   lr: 0.001
   opt: Adam
   epochs: 100
+
 test:
   threshold: 0.5
