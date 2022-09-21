@@ -21,7 +21,8 @@ from lungs_class import LungSegDataset , plot_acc_loss
 import os 
 from datetime import datetime 
 from torch.autograd import Variable
-
+from angio_class import AngioClass
+import glob
 class DiceIndex(torch.nn.Module):
     def __init__(self):
         super(DiceIndex, self).__init__()
@@ -180,39 +181,47 @@ def main():
     with open('config.yaml') as f: # reads .yml/.yaml files
         config = yaml.safe_load(f)
     
-    dataset_df = create_dataset_csv(config["data"]["frame"], 
-                                    config["data"]["vasselness"])
+    # dataset_df = create_dataset_csv(config["data"]["frame"], 
+    #                                 config["data"]["vasselness"],)
                               
 
-    dataset_df = split_dataset(dataset_df, split_per=config['data']['split_per'], seed=1)
-    dataset_df.head(3)
+    # dataset_df = split_dataset(dataset_df, split_per=config['data']['split_per'], seed=1)
+    # dataset_df.head(3)
 
-    data_ds = LungSegDataset(dataset_df, img_size=config["data"]["img_size"])
-    x, y = data_ds[0]
-    print(x.shape, y.shape)
-    print(network)
+    # data_ds = LungSegDataset(dataset_df, img_size=config["data"]["img_size"])
+    # x, y = data_ds[0]
+    # print(x.shape, y.shape)
+    # print(network)
 
+    path_list=[]
+    path_construct=glob.glob(r"E:\__RCA_bif_detection\data\*")
+    for image in path_construct:
+        path_construct_2=glob.glob(image)
+        for view in path_construct_2:
+            path_list.append(view)
+            
+            
 
-  
-    train_df = dataset_df.loc[dataset_df["subset"] == "train", :]
-    train_ds = LungSegDataset(train_df, img_size=config["data"]["img_size"])
+    
+    train_ds = AngioClass(path_list, img_size=config["data"]["img_size"])
     train_loader = torch.utils.data.DataLoader(train_ds, batch_size=config['train']['bs'], shuffle=True)
+    print (train_loader)
 
-    valid_df = dataset_df.loc[dataset_df["subset"] == "valid", :]
-    valid_ds = LungSegDataset(valid_df, img_size=config["data"]["img_size"])
-    valid_loader = torch.utils.data.DataLoader(valid_ds, batch_size=config['train']['bs'], shuffle=False)
+   # valid_df = dataset_df.loc[dataset_df["subset"] == "valid", :]
+    #valid_ds = LungSegDataset(valid_df, img_size=config["data"]["img_size"])
+    #valid_loader = torch.utils.data.DataLoader(valid_ds, batch_size=config['train']['bs'], shuffle=False)
 
-    print(f"# Train: {len(train_ds)} # Valid: {len(valid_ds)}")
+    # print(f"# Train: {len(train_ds)} # Valid: {len(valid_ds)}")
 
-    criterion = DiceLoss()
+    # criterion = DiceLoss()
 
-    if config['train']['opt'] == 'Adam':
-        opt = torch.optim.Adam(network.parameters(), lr=config['train']['lr'])
-    elif config['train']['opt'] == 'SGD':
-        opt = torch.optim.SGD(network.parameters(), lr=config['train']['lr'])
+    # if config['train']['opt'] == 'Adam':
+    #     opt = torch.optim.Adam(network.parameters(), lr=config['train']['lr'])
+    # elif config['train']['opt'] == 'SGD':
+    #     opt = torch.optim.SGD(network.parameters(), lr=config['train']['lr'])
 
-    history = train(network, train_loader, valid_loader, criterion, opt, epochs=config['train']['epochs'], thresh=config['test']['threshold'], weights_dir=path)
-    plot_acc_loss(history,path)
+    # history = train(network, train_loader, valid_loader, criterion, opt, epochs=config['train']['epochs'], thresh=config['test']['threshold'], weights_dir=path)
+    # plot_acc_loss(history,path)
     
 
 if __name__ == "__main__":
