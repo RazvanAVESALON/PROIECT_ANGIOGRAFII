@@ -17,7 +17,7 @@ from tqdm import tqdm
 from UNet import UNet
 
 
-def create_dataset_csv(images_dir, right_masks_dir, left_masks_dir, csv_path):
+def create_dataset_csv(images_dir, csv_path):
     """Generare csv cu caile catre imaginile de input si mastile de segmentare
 
     Args:
