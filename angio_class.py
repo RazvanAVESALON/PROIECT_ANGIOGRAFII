@@ -36,11 +36,14 @@ class AngioClass(torch.utils.data.Dataset):
         """
      
                
-        row = self.dataset_df.iloc[idx, :]
-
+        row = self.dataset_df.iloc[idx]
+    
+        
+     
         img = cv2.imread(str(row['image_path']), cv2.IMREAD_GRAYSCALE)
+        
         x = np.expand_dims(img, axis=0)
-       
+        print (x)
     
         j=str(row['annotations_path'])
         with open (j) as f :
