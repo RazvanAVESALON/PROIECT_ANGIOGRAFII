@@ -176,7 +176,10 @@ def main():
     os.mkdir(path)
     dir="Weights"
     path=os.path.join(path, dir)
-    os.mkdir(path)
+    if os.path.exists(path=path):
+        print(path)
+    else: 
+        os.mkdir(path)
 
     network = UNet(n_channels=1, n_classes=2,final_activation=nn.Softmax(dim=1))
 
@@ -214,9 +217,10 @@ def main():
     dataset_df = pd.DataFrame(path_list)     
     
     dataset_df = split_dataset(dataset_df, split_per=config['data']['split_per'], seed=1)
-    dataset_df.head(3)
+    print (dataset_df.head(3))
     
-    train_ds = AngioClass(dataset_df)
+    train_ds = AngioClass(dataset_df['subset']=='train')
+    print(train_ds)
     train_loader = torch.utils.data.DataLoader(train_ds, batch_size=config['train']['bs'], shuffle=True)
     print (train_loader)
 
