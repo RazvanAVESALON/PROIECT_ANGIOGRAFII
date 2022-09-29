@@ -17,13 +17,13 @@ import torchvision.transforms as T
 import torchmetrics 
 
 class AngioClass(torch.utils.data.Dataset):
-    def __init__(self, image_path_list):
-        self.image_path_list = image_path_list
+    def __init__(self, dataset_df):
+        self.dataset_df = dataset_df.reset_index(drop=True)
       
     
     def __len__(self):
       
-        return len(self.image_path_list) 
+       return len(self.dataset_df) 
 
     def __getitem__(self, idx):
         """Returneaza un tuple (input, target) care corespunde cu batch #idx.
@@ -34,26 +34,29 @@ class AngioClass(torch.utils.data.Dataset):
         Returns:
            tuple:  (input, target) care corespunde cu batch #idx
         """
-        list_of_img:[]
-        list_of_annotaion:[] 
-        for i in self.image_path_list: 
-            
-            img = cv2.imread(os.path.join(i,f"frame_extractor_frames.npz"), cv2.IMREAD_GRAYSCALE)
-            list_of_img.append(img)
-            with open(os.path.join(i, "clipping_points.json"), "r") as f:
-                clipping_points = json.load(f)
-            
-            list_of_annotaion.append(clipping_points)
+     
+               
+        row = self.dataset_df.iloc[idx, :]
+
+        img = cv2.imread(str(row['image_path']), cv2.IMREAD_GRAYSCALE)
+        x = np.expand_dims(img, axis=0)
+       
+    
+        j=str(row['annotations_path'])
+        with open (j) as f :
+            date=json.load(f)
+        print (date)    
+        points=date.values()
+        pts = np.array(points, np.uint8)
+        img=np.zeros((1024,1024,3), np.uint8)
         
-        list_of_image_tensors:[]
-        for image in list_of_image_tensors:
-            x=torch.from_numpy(image)
-            list_of_image_tensors.append(x)
+        filled = cv2.fillPoly(img, pts = [pts], color =(255,255,255))
         
-        list_of_annotation_tensors:[]
-        for image in list_of_annotaion:
-            x=torch.from_numpy(image)
-            list_of_annotation_tensors.append(x)
+        print (filled)
+   
+        
+        y = np.expand_dims(filled, axis=0)
+          
             
             
-        return list_of_image_tensors,list_of_annotation_tensors
+        return torch.as_tensor(x.copy()).float(), torch.as_tensor(y.copy()).long()
