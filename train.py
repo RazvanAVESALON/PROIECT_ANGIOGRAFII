@@ -1,3 +1,6 @@
+from __future__ import annotations
+from importlib.resources import path
+from tkinter import Image, image_names
 from unittest import loader
 import matplotlib.pyplot as plt
 import numpy as np
@@ -181,7 +184,7 @@ def main():
     with open('config.yaml') as f: # reads .yml/.yaml files
         config = yaml.safe_load(f)
     
-    # dataset_df = create_dataset_csv(config["data"]["frame"], 
+    #dataset_df = create_dataset_csv(config["data"]["frame"], 
     #                                 config["data"]["vasselness"],)
                               
 
@@ -193,35 +196,45 @@ def main():
     # print(x.shape, y.shape)
     # print(network)
 
-    path_list=[]
+    path_list={"image_path":[],"annotations_path":[]}
     path_construct=glob.glob(r"E:\__RCA_bif_detection\data\*")
     for image in path_construct:
-        path_construct_2=glob.glob(image)
-        for view in path_construct_2:
-            path_list.append(view)
+        #print (image)
+        #x=os.path.join(image,r"*")
+        
+        x=glob.glob(os.path.join(image,r"*"))
+       # print (x)
+        for view in x:
+            img=os.path.join(view,"frame_extractor_frames.npz")
+            annotations=os.path.join(view,"clipping_points.json")
             
-            
+            path_list['image_path'].append(img)
+            path_list['annotations_path'].append(annotations)
 
+    dataset_df = pd.DataFrame(path_list)     
     
-    train_ds = AngioClass(path_list, img_size=config["data"]["img_size"])
+    dataset_df = split_dataset(dataset_df, split_per=config['data']['split_per'], seed=1)
+    dataset_df.head(3)
+    
+    train_ds = AngioClass(dataset_df)
     train_loader = torch.utils.data.DataLoader(train_ds, batch_size=config['train']['bs'], shuffle=True)
     print (train_loader)
 
-   # valid_df = dataset_df.loc[dataset_df["subset"] == "valid", :]
-    #valid_ds = LungSegDataset(valid_df, img_size=config["data"]["img_size"])
-    #valid_loader = torch.utils.data.DataLoader(valid_ds, batch_size=config['train']['bs'], shuffle=False)
+    valid_df = dataset_df.loc[dataset_df["subset"] == "valid", :]
+    valid_ds = LungSegDataset(valid_df, img_size=config["data"]["img_size"])
+    valid_loader = torch.utils.data.DataLoader(valid_ds, batch_size=config['train']['bs'], shuffle=False)
 
-    # print(f"# Train: {len(train_ds)} # Valid: {len(valid_ds)}")
+    print(f"# Train: {len(train_ds)} # Valid: {len(valid_ds)}")
 
-    # criterion = DiceLoss()
+    criterion = DiceLoss()
 
-    # if config['train']['opt'] == 'Adam':
-    #     opt = torch.optim.Adam(network.parameters(), lr=config['train']['lr'])
-    # elif config['train']['opt'] == 'SGD':
-    #     opt = torch.optim.SGD(network.parameters(), lr=config['train']['lr'])
+    if config['train']['opt'] == 'Adam':
+        opt = torch.optim.Adam(network.parameters(), lr=config['train']['lr'])
+    elif config['train']['opt'] == 'SGD':
+        opt = torch.optim.SGD(network.parameters(), lr=config['train']['lr'])
 
-    # history = train(network, train_loader, valid_loader, criterion, opt, epochs=config['train']['epochs'], thresh=config['test']['threshold'], weights_dir=path)
-    # plot_acc_loss(history,path)
+    history = train(network, train_loader, valid_loader, criterion, opt, epochs=config['train']['epochs'], thresh=config['test']['threshold'], weights_dir=path)
+    plot_acc_loss(history,path)
     
 
 if __name__ == "__main__":
