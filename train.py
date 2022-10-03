@@ -98,10 +98,10 @@ def train(network, train_loader, valid_loader, criterion, opt, epochs, thresh=0.
                         #print(tgs.size())
                         #print(output.size())
                      
-                        # second_output = Variable(torch.argmax(output,1).float(),requires_grad=True).cuda()
-                        # output[:, 1, :, :] => 8 x 128 x 1288
-                        # tgs => 8 x 1 x 128 x 128
-                        # tgs.squeeze() => 8 x 128 x 128
+                        #second_output = Variable(torch.argmax(output,1).float(),requires_grad=True).cuda()
+                        #output[:, 1, :, :] #=> 8 x 128 x 1288
+                        #tgs => 8 x 1 x 128 x 128
+                        #tgs.squeeze() #=> 8 x 128 x 128
                         
                         # se calculeaza eroarea/loss-ul
                         loss = criterion(output[:, 1, :, :], tgs.squeeze())
@@ -229,7 +229,7 @@ def main():
     print (train_loader)
 
     valid_df = dataset_df.loc[dataset_df["subset"] == "valid", :]
-    valid_ds = LungSegDataset(valid_df, img_size=config["data"]["img_size"])
+    valid_ds = AngioClass(valid_df)
     valid_loader = torch.utils.data.DataLoader(valid_ds, batch_size=config['train']['bs'], shuffle=False)
 
     print(f"# Train: {len(train_ds)} # Valid: {len(valid_ds)}")
