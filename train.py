@@ -1,6 +1,7 @@
 from __future__ import annotations
+from genericpath import exists
 from importlib.resources import path
-from tkinter import Image, image_names
+from tkinter import TRUE, Image, image_names
 from unittest import loader
 import matplotlib.pyplot as plt
 import numpy as np
@@ -176,7 +177,9 @@ def main():
     os.mkdir(path)
     dir="Weights"
     path=os.path.join(path, dir)
-    if os.path.exists(path=path):
+    print(os.path.exists(path))
+    exists=os.path.exists(path)
+    if exists==True:
         print(path)
     else: 
         os.mkdir(path)
@@ -219,7 +222,8 @@ def main():
     dataset_df = split_dataset(dataset_df, split_per=config['data']['split_per'], seed=1)
     print (dataset_df.head(3))
     
-    train_ds = AngioClass(dataset_df['subset']=='train')
+    train_df = dataset_df.loc[dataset_df["subset"] == "train"]
+    train_ds = AngioClass(train_df)
     print(train_ds)
     train_loader = torch.utils.data.DataLoader(train_ds, batch_size=config['train']['bs'], shuffle=True)
     print (train_loader)
