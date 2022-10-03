@@ -36,30 +36,43 @@ class AngioClass(torch.utils.data.Dataset):
         """
      
                
-        row = self.dataset_df.iloc[idx]
-    
+       # row = self.dataset_df.iloc[[idx]]
+       # print (row)
         
-     
-        img = cv2.imread(str(row['image_path']), cv2.IMREAD_GRAYSCALE)
+       
+        img = np.load(self.dataset_df['image_path'][idx])['arr_0']
         
+        print (img.shape)
+        
+        print('IMAGINE:',img)
         x = np.expand_dims(img, axis=0)
-        print (x)
-    
-        j=str(row['annotations_path'])
-        with open (j) as f :
-            date=json.load(f)
-        print (date)    
-        points=date.values()
-        pts = np.array(points, np.uint8)
-        img=np.zeros((1024,1024,3), np.uint8)
         
-        filled = cv2.fillPoly(img, pts = [pts], color =(255,255,255))
+        #print ('imagine:',x)
+        print(self.dataset_df['annotations_path'][idx])
         
-        print (filled)
-   
+        with open (self.dataset_df['annotations_path'][idx]) as f :
+            clipping_points=json.load(f)
+        print (clipping_points)    
         
-        y = np.expand_dims(filled, axis=0)
-          
+        target=np.zeros(img.shape)
+        for frame in clipping_points:
+            frame_int= int(frame)
+            target[frame_int]=cv2.circle(target[frame_int],[clipping_points[frame][1],clipping_points[frame][0]],8,[255,255,255],-1)
+            
+            
+            
+            #plt.imshow(img[frame_int], cmap="gray")
+            #plt.imshow(target[frame_int,:,:], cmap="gray")
+            #plt.imshow(vesselness[frame_int], cmap="jet", alpha=0.5)
+            #plt.scatter(clipping_points[frame][1], clipping_points[frame][0], marker="x", color="white")
+
+            #plt.show()
+
+        
+        
+        y = np.expand_dims(target, axis=0)
+        
+        #print(x.shape,y.shape)
             
             
         return torch.as_tensor(x.copy()).float(), torch.as_tensor(y.copy()).long()
