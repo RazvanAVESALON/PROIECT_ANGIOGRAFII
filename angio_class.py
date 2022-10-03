@@ -45,17 +45,17 @@ class AngioClass(torch.utils.data.Dataset):
        
         img = np.load(self.dataset_df['image_path'][idx])['arr_0']
         
-        print (img.shape)
+        #print (img.shape)
         
-        print('IMAGINE:',img)
-        x = np.expand_dims(img, axis=0)
+        #print('IMAGINE:',img)
+        #x = np.expand_dims(img, axis=0)
         
         #print ('imagine:',x)
-        print(self.dataset_df['annotations_path'][idx])
+        #print(self.dataset_df['annotations_path'][idx])
         
         with open (self.dataset_df['annotations_path'][idx]) as f :
             clipping_points=json.load(f)
-        print (clipping_points)    
+        #print (clipping_points)    
         
         target=np.zeros(img.shape)
         for frame in clipping_points:
@@ -70,11 +70,18 @@ class AngioClass(torch.utils.data.Dataset):
             #plt.scatter(clipping_points[frame][1], clipping_points[frame][0], marker="x", color="white")
 
             #plt.show()
+            #x=img[frame_int,:,:]
+            #y=target[frame_int,:,:]
+            #x = np.expand_dims(x, axis=0)
+            #y = np.expand_dims(y, axis=0)
+            
+            
+        return torch.as_tensor(img.copy()).float(), torch.as_tensor(target.copy()).long()
 
         
         
-        #y = np.expand_dims(target, axis=0)
+        
         
         
             
-        return torch.as_tensor(x.copy()).float(), torch.as_tensor(y.copy()).long()
+        
