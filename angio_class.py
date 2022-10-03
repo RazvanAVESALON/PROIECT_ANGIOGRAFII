@@ -24,6 +24,9 @@ class AngioClass(torch.utils.data.Dataset):
     def __len__(self):
       
        return len(self.dataset_df) 
+   
+   
+   
 
     def __getitem__(self, idx):
         """Returneaza un tuple (input, target) care corespunde cu batch #idx.
@@ -70,9 +73,8 @@ class AngioClass(torch.utils.data.Dataset):
 
         
         
-        y = np.expand_dims(target, axis=0)
+        #y = np.expand_dims(target, axis=0)
         
-        #print(x.shape,y.shape)
-            
+        
             
         return torch.as_tensor(x.copy()).float(), torch.as_tensor(y.copy()).long()
