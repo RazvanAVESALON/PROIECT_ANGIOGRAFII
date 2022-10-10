@@ -28,7 +28,7 @@ class AngioClass(torch.utils.data.Dataset):
    
    
 
-    def __getitem__(self, idx):
+    def __getitem__(self,idx):
         """Returneaza un tuple (input, target) care corespunde cu batch #idx.
 
         Args:
@@ -43,8 +43,10 @@ class AngioClass(torch.utils.data.Dataset):
        # print (row)
         
        
-        img = np.load(self.dataset_df['image_path'][idx])['arr_0']
-        
+        img = np.load(self.dataset_df['images_path'][idx])['arr_0']
+        frame_param=self.dataset_df['frames'][idx]
+        x = np.expand_dims(img[frame_param], axis=0)
+        #print (frame_param)
         #print (img.shape)
         
         #print('IMAGINE:',img)
@@ -60,7 +62,8 @@ class AngioClass(torch.utils.data.Dataset):
         target=np.zeros(img.shape)
         for frame in clipping_points:
             frame_int= int(frame)
-            target[frame_int]=cv2.circle(target[frame_int],[clipping_points[frame][1],clipping_points[frame][0]],8,[255,255,255],-1)
+            if frame_param==frame_int:
+                target[frame_int]=cv2.circle(target[frame_int],[clipping_points[frame][1],clipping_points[frame][0]],8,[255,255,255],-1)
             
             
             
@@ -72,11 +75,12 @@ class AngioClass(torch.utils.data.Dataset):
             #plt.show()
             #x=img[frame_int,:,:]
             #y=target[frame_int,:,:]
-            #x = np.expand_dims(x, axis=0)
-            #y = np.expand_dims(y, axis=0)
+            
+      
+        y = np.expand_dims(target[frame_param], axis=0)
             
             
-        return torch.as_tensor(img.copy()).float(), torch.as_tensor(target.copy()).long()
+        return torch.as_tensor(x.copy()).float(), torch.as_tensor(y.copy()).float()
 
         
         
