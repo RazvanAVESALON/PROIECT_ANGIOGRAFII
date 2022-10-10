@@ -27,6 +27,11 @@ from datetime import datetime
 from torch.autograd import Variable
 from angio_class import AngioClass
 import glob
+import json
+
+import gc
+
+
 class DiceIndex(torch.nn.Module):
     def __init__(self):
         super(DiceIndex, self).__init__()
@@ -50,7 +55,10 @@ class DiceLoss(torch.nn.Module):
     def forward(self, pred, target):
        return  1 - self.dice_index(pred, target)
 
-    
+#def split_frames(image,annotation):
+       
+
+
 
 def train(network, train_loader, valid_loader, criterion, opt, epochs, thresh=0.5, weights_dir='weights', save_every_ep=5):
     total_loss = {'train': [], 'valid': []}
@@ -169,9 +177,15 @@ def main():
     print(f"torchvision version {torchvision.__version__}")
     print(f"torchmetrics version {torchmetrics.__version__}")
     print(f"CUDA available {torch.cuda.is_available()}")
+    gc.collect()
 
+    torch.cuda.empty_cache()
+    
+    
+    from GPUtil import showUtilization as gpu_usage
+    gpu_usage()  
     directory =f"Experiment_Dice_index{datetime.now().strftime('%m%d%Y_%H%M')}"
-
+    
     parent_dir =os.getcwd() # get current working directory
     path = os.path.join(parent_dir, directory)
     os.mkdir(path)
@@ -202,7 +216,8 @@ def main():
     # print(x.shape, y.shape)
     # print(network)
 
-    path_list={"image_path":[],"annotations_path":[]}
+    path_list={"images_path":[],"annotations_path":[],"frames":[]}
+    #frame_list={"frames"}
     path_construct=glob.glob(r"E:\__RCA_bif_detection\data\*")
     for image in path_construct:
         #print (image)
@@ -213,11 +228,19 @@ def main():
         for view in x:
             img=os.path.join(view,"frame_extractor_frames.npz")
             annotations=os.path.join(view,"clipping_points.json")
-            
-            path_list['image_path'].append(img)
-            path_list['annotations_path'].append(annotations)
+            with open (annotations) as f :
+                clipping_points=json.load(f)
 
-    dataset_df = pd.DataFrame(path_list)     
+            for frame in clipping_points:
+                frame_int= int(frame)
+                
+                path_list['images_path'].append(img)
+                path_list['annotations_path'].append(annotations)
+                path_list['frames'].append(frame_int)
+            
+
+    dataset_df = pd.DataFrame(path_list)  
+       
     
     dataset_df = split_dataset(dataset_df, split_per=config['data']['split_per'], seed=1)
     print (dataset_df.head(3))
