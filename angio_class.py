@@ -1,5 +1,6 @@
 from __future__ import annotations
 from hashlib import new
+from statistics import geometric_mean
 from tkinter import Y, image_names
 import matplotlib.pyplot as plt
 import numpy as np
@@ -19,9 +20,11 @@ import torchmetrics
 
 
 class AngioClass(torch.utils.data.Dataset):
-    def __init__(self, dataset_df, img_size):
+    def __init__(self, dataset_df, img_size,geometric_transforms,pixel_transforms):
         self.dataset_df = dataset_df.reset_index(drop=True)
         self.img_size = tuple(img_size)
+        self.geometric_transforms=geometric_transforms
+        self.pixel_transforms=pixel_transforms
 
     def __len__(self):
 
@@ -37,34 +40,25 @@ class AngioClass(torch.utils.data.Dataset):
         new_img = cv2.resize(img[frame_param], self.img_size, interpolation=cv2.INTER_AREA)
         new_img = new_img*1/255
 
-        #x = np.expand_dims(new_img, axis=0)
-
         with open(self.dataset_df['annotations_path'][idx]) as f:
             clipping_points = json.load(f)
 
         target = np.zeros(img.shape, dtype=np.uint8)
         target[frame_param] = cv2.circle(target[frame_param], [clipping_points[str(frame_param)][1], clipping_points[str(frame_param)][0]], 8, [255, 255, 255], -1)
         new_target = cv2.resize( target[frame_param], self.img_size, interpolation=cv2.INTER_AREA)
-        # plt.imshow(new_target, cmap="gray")
-        # plt.show()
-
-        y = np.expand_dims(new_target, axis=0)
-
-        transforms = T.Compose([
-            T.ToPILImage(),
-            T.RandomRotation(degrees=random.randint(0, 360)),
-            T.RandomHorizontalFlip(),
-            T.GaussianBlur(kernel_size=(5, 9), sigma=(0.1, 1)),
-            T.ToTensor(),
-        ])
-
+     
         tensor_x = torch.from_numpy(new_img)
-        tensor_x = transforms(tensor_x)
-
-        #plt.imshow(tensor_x, cmap="gray")
+        tensor_x = self.geometric_transforms(tensor_x)
+        tensor_x=  self.pixel_transforms(tensor_x)
+        
+        tensor_y=torch.from_numpy(new_target)
+        tensor_y=self.geometric_transforms(tensor_y)
+        # plt.imshow(tensor_x[0], cmap="gray")
+        # plt.show()
+        # plt.imshow(tensor_y[0], cmap="gray")
         # plt.show()
 
-        return tensor_x, torch.as_tensor(y.copy()).float()
+        return tensor_x, tensor_y
 
 
 def plot_acc_loss(result,path):
