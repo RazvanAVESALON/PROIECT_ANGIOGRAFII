@@ -42,8 +42,8 @@ def create_dataset_csv(path_construct):
                 path_list['images_path'].append(img)
                 path_list['annotations_path'].append(annotations)
                 path_list['frames'].append(frame_int)
-                path_list['patient'].append(patient)
-                path_list['acquisition'].append(acquisiton)
+                path_list['patient'].append(os.path.basename(patient))
+                path_list['acquisition'].append(os.path.basename(acquisiton))
         
             
 
