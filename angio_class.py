@@ -1,4 +1,5 @@
 from __future__ import annotations
+from hashlib import new
 from tkinter import Y, image_names
 import matplotlib.pyplot as plt
 import numpy as np
@@ -8,84 +9,87 @@ import random
 import yaml
 import cv2
 import json
-import os 
+import os
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torchvision
 import torchvision.transforms as T
-import torchmetrics 
+import torchmetrics
+
 
 class AngioClass(torch.utils.data.Dataset):
-    def __init__(self, dataset_df):
+    def __init__(self, dataset_df, img_size):
         self.dataset_df = dataset_df.reset_index(drop=True)
-      
-    
+        self.img_size = tuple(img_size)
+
     def __len__(self):
-      
-       return len(self.dataset_df) 
-   
-   
-   
 
-    def __getitem__(self,idx):
-        """Returneaza un tuple (input, target) care corespunde cu batch #idx.
+        return len(self.dataset_df)
 
-        Args:
-            idx (int): indexul batch-ului curent
-
-        Returns:
-           tuple:  (input, target) care corespunde cu batch #idx
-        """
-     
-               
-       # row = self.dataset_df.iloc[[idx]]
-       # print (row)
-        
-       
+    def __getitem__(self, idx):
         img = np.load(self.dataset_df['images_path'][idx])['arr_0']
-        frame_param=self.dataset_df['frames'][idx]
-        x = np.expand_dims(img[frame_param], axis=0)
-        #print (frame_param)
-        #print (img.shape)
-        
-        #print('IMAGINE:',img)
-        #x = np.expand_dims(img, axis=0)
-        
-        #print ('imagine:',x)
-        #print(self.dataset_df['annotations_path'][idx])
-        
-        with open (self.dataset_df['annotations_path'][idx]) as f :
-            clipping_points=json.load(f)
-        #print (clipping_points)    
-        
-        target=np.zeros(img.shape)
-        for frame in clipping_points:
-            frame_int= int(frame)
-            if frame_param==frame_int:
-                target[frame_int]=cv2.circle(target[frame_int],[clipping_points[frame][1],clipping_points[frame][0]],8,[255,255,255],-1)
-            
-            
-            
-            #plt.imshow(img[frame_int], cmap="gray")
-            #plt.imshow(target[frame_int,:,:], cmap="gray")
-            #plt.imshow(vesselness[frame_int], cmap="jet", alpha=0.5)
-            #plt.scatter(clipping_points[frame][1], clipping_points[frame][0], marker="x", color="white")
+       
 
-            #plt.show()
-            #x=img[frame_int,:,:]
-            #y=target[frame_int,:,:]
-            
-      
-        y = np.expand_dims(target[frame_param], axis=0)
-            
-            
-        return torch.as_tensor(x.copy()).float(), torch.as_tensor(y.copy()).float()
+        frame_param = self.dataset_df['frames'][idx]
+        new_img = img[frame_param]
 
-        
-        
-        
-        
-        
-            
-        
+        new_img = cv2.resize(img[frame_param], self.img_size, interpolation=cv2.INTER_AREA)
+        new_img = new_img*1/255
+
+        #x = np.expand_dims(new_img, axis=0)
+
+        with open(self.dataset_df['annotations_path'][idx]) as f:
+            clipping_points = json.load(f)
+
+        target = np.zeros(img.shape, dtype=np.uint8)
+        target[frame_param] = cv2.circle(target[frame_param], [clipping_points[str(frame_param)][1], clipping_points[str(frame_param)][0]], 8, [255, 255, 255], -1)
+        new_target = cv2.resize( target[frame_param], self.img_size, interpolation=cv2.INTER_AREA)
+        # plt.imshow(new_target, cmap="gray")
+        # plt.show()
+
+        y = np.expand_dims(new_target, axis=0)
+
+        transforms = T.Compose([
+            T.ToPILImage(),
+            T.RandomRotation(degrees=random.randint(0, 360)),
+            T.RandomHorizontalFlip(),
+            T.GaussianBlur(kernel_size=(5, 9), sigma=(0.1, 1)),
+            T.ToTensor(),
+        ])
+
+        tensor_x = torch.from_numpy(new_img)
+        tensor_x = transforms(tensor_x)
+
+        #plt.imshow(tensor_x, cmap="gray")
+        # plt.show()
+
+        return tensor_x, torch.as_tensor(y.copy()).float()
+
+
+def plot_acc_loss(result,path):
+    acc = result['acc']['train']
+    loss = result['loss']['train']
+    val_acc = result['acc']['valid']
+    val_loss = result['loss']['valid']
+    
+    plt.figure(figsize=(15, 5))
+    plt.subplot(121)
+    plt.plot(acc, label='Train')
+    plt.plot(val_acc, label='Validation')
+    plt.title('Accuracy', size=15)
+    plt.legend()
+    plt.grid(True)
+    plt.ylabel('Accuracy')
+    plt.xlabel('Epoch')
+    
+    plt.subplot(122)
+    plt.plot(loss, label='Train')
+    plt.plot(val_loss, label='Validation')
+    plt.title('Loss', size=15)
+    plt.legend()
+    plt.grid(True)
+    plt.ylabel('Loss')
+    plt.xlabel('Epoch')
+    
+    plt.savefig(f"{path}\\Curbe de învățare")
