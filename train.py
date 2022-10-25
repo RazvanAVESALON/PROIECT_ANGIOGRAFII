@@ -55,6 +55,8 @@ class DiceLoss(torch.nn.Module):
         
     def forward(self, pred, target):
        return  1 - self.dice_index(pred, target)
+   
+
 
 #def split_frames(image,annotation):
        
@@ -73,7 +75,7 @@ def train(network, train_loader, valid_loader, criterion, opt, epochs, thresh=0.
         'valid': valid_loader
     }
     
-    metric=DiceIndex()
+    metric=dice_score
     network.to(device)
     criterion.to(device)
 
@@ -200,35 +202,36 @@ def main():
     with open('config.yaml') as f: # reads .yml/.yaml files
         config = yaml.safe_load(f)
     
-    #dataset_df = create_dataset_csv(config["data"]["frame"], 
-    #                                 config["data"]["vasselness"],)
-                              
+    geometrics = T.Compose([
+            T.ToPILImage(),
+            T.RandomRotation(degrees=random.randint(config['train']['rotation_degrees_bottom'],config['train']['rotation_degrees_top'])),
+            T.RandomHorizontalFlip(config['train']['flip_probability']),
+            
+            T.ToTensor(),
+    ])
+    
+    pixels=T.Compose([
+        T.ToPILImage(),
+        T.GaussianBlur(kernel_size=(config['train']['kernel_size']), sigma=config['train']['sigma']),
+        T.ToTensor(),
+    ])
 
-    # dataset_df = split_dataset(dataset_df, split_per=config['data']['split_per'], seed=1)
-    # dataset_df.head(3)
-
-    # data_ds = LungSegDataset(dataset_df, img_size=config["data"]["img_size"])
-    # x, y = data_ds[0]
-    # print(x.shape, y.shape)
-    # print(network)
-
-    path_construct=glob.glob(r"E:\__RCA_bif_detection\data\*")
+    path_construct=glob.glob(config["data"]['data_path'])
     path_list=create_dataset_csv(path_construct)
     dataset_df = pd.DataFrame(path_list)  
-    dataset_df.to_csv(r'D:\ai intro\Angiografii\PROIECT_ANGIOGRAFII\CSV_angiografii.csv')  
+    dataset_df.to_csv(config['data']['dataset_csv'])  
     
     dataset_df = split_dataset(dataset_df, split_per=config['data']['split_per'], seed=1)
     print (dataset_df.head(3))
-    dataset_df.to_csv(r'D:\ai intro\Angiografii\PROIECT_ANGIOGRAFII\CSV_angiografii.csv')  
+    
     
     train_df = dataset_df.loc[dataset_df["subset"] == "train"]
-    train_ds = AngioClass(train_df,img_size=config['data']['img_size'])
-    print(train_ds)
+    train_ds = AngioClass(train_df,img_size=config['data']['img_size'],geometric_transforms=geometrics,pixel_transforms=pixels)
     train_loader = torch.utils.data.DataLoader(train_ds, batch_size=config['train']['bs'], shuffle=True)
     print (train_loader)
 
     valid_df = dataset_df.loc[dataset_df["subset"] == "valid", :]
-    valid_ds = AngioClass(valid_df,img_size=config['data']['img_size'])
+    valid_ds = AngioClass(valid_df,img_size=config['data']['img_size'],geometric_transforms=geometrics,pixel_transforms=pixels)
     valid_loader = torch.utils.data.DataLoader(valid_ds, batch_size=config['train']['bs'], shuffle=False)
 
     print(f"# Train: {len(train_ds)} # Valid: {len(valid_ds)}")
@@ -239,6 +242,8 @@ def main():
         opt = torch.optim.Adam(network.parameters(), lr=config['train']['lr'])
     elif config['train']['opt'] == 'SGD':
         opt = torch.optim.SGD(network.parameters(), lr=config['train']['lr'])
+    elif config['train']['opt']== "RMSprop":
+        opt = torch.optim.RMSprop(network.parameters(), lr=config['train']['lr'])
 
     history = train(network, train_loader, valid_loader, criterion, opt, epochs=config['train']['epochs'], thresh=config['test']['threshold'], weights_dir=path)
     plot_acc_loss(history,path)
