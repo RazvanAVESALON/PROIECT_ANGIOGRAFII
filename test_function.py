@@ -28,7 +28,7 @@ def test(network, test_loader, thresh=0.5):
             tgs = tgs.to('cpu')
 
             output = network(ins)
-            current_predict = (F.softmax(output, dim=1)[:, 1] > thresh).float()
+            current_predict = (F.softmax(output, dim=1)[:, 1] > thresh)
 
             if 'cuda' in device.type:
                 current_predict = current_predict.cpu()
