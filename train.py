@@ -1,6 +1,7 @@
 from __future__ import annotations
 from genericpath import exists
 from importlib.resources import path
+from operator import truediv
 from tkinter import TRUE, Image, image_names
 from unittest import loader
 import matplotlib.pyplot as plt
@@ -21,15 +22,15 @@ import torchmetrics
 from tqdm import tqdm
 from UNet import UNet
 from configurare_data import create_dataset_csv , split_dataset
-from lungs_class import LungSegDataset , plot_acc_loss
 import os 
 from datetime import datetime 
 from torch.autograd import Variable
-from angio_class import AngioClass
+from angio_class import AngioClass , plot_acc_loss
 import glob
 import json
 
 import gc
+
 
 
 class DiceIndex(torch.nn.Module):
@@ -62,7 +63,7 @@ class DiceLoss(torch.nn.Module):
 
 def train(network, train_loader, valid_loader, criterion, opt, epochs, thresh=0.5, weights_dir='weights', save_every_ep=5):
     total_loss = {'train': [], 'valid': []}
-    total_acc = {'train': [], 'valid': []}
+    total_dice = {'train': [], 'valid': []}
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     print(f"[INFO] Starting training on device {device} ...")
@@ -72,7 +73,7 @@ def train(network, train_loader, valid_loader, criterion, opt, epochs, thresh=0.
         'valid': valid_loader
     }
     
-    metric=dice_score
+    metric=DiceIndex()
     network.to(device)
     criterion.to(device)
 
@@ -128,7 +129,7 @@ def train(network, train_loader, valid_loader, criterion, opt, epochs, thresh=0.
 
                         # print(current_predict.shape, current_target.shape)
                         # print(current_predict.dtype, current_target.dtype)
-                        acc = metric(current_predict, current_target)
+                        dice = metric(current_predict, current_target)
                         # print(f"\tAcc on batch {i}: {acc}")
 
                         if phase == 'train':
@@ -139,7 +140,7 @@ def train(network, train_loader, valid_loader, criterion, opt, epochs, thresh=0.
                     
                     running_loss += loss.item() * ins.size(0)
                     
-                    running_average += acc.item()* ins.size(0)
+                    running_average += dice.item()* ins.size(0)
                     # print(running_loss, loss.item())
 
                     if phase == 'valid':
@@ -162,15 +163,15 @@ def train(network, train_loader, valid_loader, criterion, opt, epochs, thresh=0.
                 total_loss[phase].append(running_loss/len(loaders[phase].dataset))
                 
                 # Calculam acuratetea pt toate batch-urile dintr-o epoca
-                total_acc[phase].append((running_average/len(loaders[phase].dataset)))
+                total_dice[phase].append((running_average/len(loaders[phase].dataset)))
             
-                postfix = f'error {total_loss[phase][-1]:.4f} accuracy {acc*100:.2f}%'
+                postfix = f'error {total_loss[phase][-1]:.4f} accuracy {dice*100:.2f}%'
                 pbar.set_postfix_str(postfix)
                         
                 # Resetam pt a acumula valorile dintr-o noua epoca
                                
                          
-    return {'loss': total_loss, 'acc': total_acc}
+    return {'loss': total_loss, 'acc': total_dice}
 
 def main():
     print(f"pyTorch version {torch.__version__}")
@@ -184,19 +185,14 @@ def main():
     
     from GPUtil import showUtilization as gpu_usage
     gpu_usage()  
-    directory =f"Experiment_Dice_index{datetime.now().strftime('%m%d%Y_%H%M')}"
+    exp_name = f"Experiment_Dice_index{datetime.now().strftime('%m%d%Y_%H%M')}"
     
-    parent_dir =os.getcwd() # get current working directory
-    path = os.path.join(parent_dir, directory)
-    os.mkdir(path)
+    exp_path = pt.Path.cwd()/exp_name # get current working directory
+    exp_path.mkdir(exist_ok=True)
     dir="Weights"
-    path=os.path.join(path, dir)
-    print(os.path.exists(path))
-    exists=os.path.exists(path)
-    if exists==True:
-        print(path)
-    else: 
-        os.mkdir(path)
+    path=pt.Path(exp_path)/dir
+    path.mkdir(exist_ok=True)
+    
 
     network = UNet(n_channels=1, n_classes=2,final_activation=nn.Softmax(dim=1))
 
@@ -216,43 +212,23 @@ def main():
     # print(x.shape, y.shape)
     # print(network)
 
-    path_list={"images_path":[],"annotations_path":[],"frames":[]}
-    #frame_list={"frames"}
     path_construct=glob.glob(r"E:\__RCA_bif_detection\data\*")
-    for image in path_construct:
-        #print (image)
-        #x=os.path.join(image,r"*")
-        
-        x=glob.glob(os.path.join(image,r"*"))
-       # print (x)
-        for view in x:
-            img=os.path.join(view,"frame_extractor_frames.npz")
-            annotations=os.path.join(view,"clipping_points.json")
-            with open (annotations) as f :
-                clipping_points=json.load(f)
-
-            for frame in clipping_points:
-                frame_int= int(frame)
-                
-                path_list['images_path'].append(img)
-                path_list['annotations_path'].append(annotations)
-                path_list['frames'].append(frame_int)
-            
-
+    path_list=create_dataset_csv(path_construct)
     dataset_df = pd.DataFrame(path_list)  
-       
+    dataset_df.to_csv(r'D:\ai intro\Angiografii\PROIECT_ANGIOGRAFII\CSV_angiografii.csv')  
     
     dataset_df = split_dataset(dataset_df, split_per=config['data']['split_per'], seed=1)
     print (dataset_df.head(3))
+    dataset_df.to_csv(r'D:\ai intro\Angiografii\PROIECT_ANGIOGRAFII\CSV_angiografii.csv')  
     
     train_df = dataset_df.loc[dataset_df["subset"] == "train"]
-    train_ds = AngioClass(train_df)
+    train_ds = AngioClass(train_df,img_size=config['data']['img_size'])
     print(train_ds)
     train_loader = torch.utils.data.DataLoader(train_ds, batch_size=config['train']['bs'], shuffle=True)
     print (train_loader)
 
     valid_df = dataset_df.loc[dataset_df["subset"] == "valid", :]
-    valid_ds = AngioClass(valid_df)
+    valid_ds = AngioClass(valid_df,img_size=config['data']['img_size'])
     valid_loader = torch.utils.data.DataLoader(valid_ds, batch_size=config['train']['bs'], shuffle=False)
 
     print(f"# Train: {len(train_ds)} # Valid: {len(valid_ds)}")
