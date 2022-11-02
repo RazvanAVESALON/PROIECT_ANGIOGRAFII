@@ -16,6 +16,7 @@ na=0
 non=0
 path_construct = glob.glob(config["data"]['data_path'])
 
+frames=[]
 for patient in path_construct:
 
     x = glob.glob(os.path.join(patient, r"*"))
@@ -26,19 +27,18 @@ for patient in path_construct:
         with open (annotations) as f :
             clipping_points=json.load(f)
         img = np.load(img)['arr_0']
+        x=img.shape[0]
+        frames.append(x)
       
-        na=na+img.shape[0]
-        non=non+len(clipping_points)
+       
         
         
-frameuri_neadnotate=na-non
 
-frames=[frameuri_neadnotate, non] 
 
 print (frames)
-plt.hist (frames)   
+plt.hist (frames,[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25])   
 plt.title('Frameuri' )
 plt.savefig(r"D:\ai intro\Angiografii\PROIECT_ANGIOGRAFII\Histograma_frameuri")  
-print (frameuri_neadnotate, non) 
+
             
             
