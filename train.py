@@ -7,7 +7,7 @@ import cv2
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torchmetrics.functional import dice
+from torchmetrics.functional import dice, dice_score
 import torchvision
 import torchvision.transforms as T
 import monai.transforms as TR
@@ -19,9 +19,10 @@ from datetime import datetime
 from angio_class import AngioClass, plot_acc_loss
 import glob
 from monai.losses.dice import DiceLoss
-
+from monai.metrics import DiceMetric , compute_meandice
 import gc
 from torchmetrics import Dice
+import monai
 
 
 # class DiceIndex(torch.nn.Module):
@@ -63,8 +64,8 @@ def train(network, train_loader, valid_loader, criterion, opt, epochs, thresh=0.
         'valid': valid_loader
     }
 
-    metric = Dice()
-
+    metric = Dice(average='micro')
+    
     network.to(device)
     criterion.to(device)
 
@@ -98,7 +99,7 @@ def train(network, train_loader, valid_loader, criterion, opt, epochs, thresh=0.
                         # print(output.size())
 
                         #second_output = Variable(torch.argmax(output,1).float(),requires_grad=True).cuda()
-                        # output[:, 1, :, :] #=> 8 x 128 x 1288
+                        # output[:, 1, :, :] #=> 8 x 128 x 128
                         # tgs => 8 x 1 x 128 x 128
                         # tgs.squeeze() #=> 8 x 128 x 128
 
@@ -106,8 +107,7 @@ def train(network, train_loader, valid_loader, criterion, opt, epochs, thresh=0.
                         loss = criterion(output[:, 1, :, :], tgs.squeeze())
 
                         # deoarece reteaua nu include un strat de softmax, predictia finala trebuie calculata manual
-                        current_predict = F.softmax(output, dim=1)[
-                            :, 1].float()
+                        current_predict = F.softmax(output, dim=1)[:, 1].float()
                         current_predict[current_predict >= thresh] = 1.0
                         current_predict[current_predict < thresh] = 0.0
 
@@ -162,7 +162,7 @@ def train(network, train_loader, valid_loader, criterion, opt, epochs, thresh=0.
 
                 # Resetam pt a acumula valorile dintr-o noua epoca
 
-    return {'loss': total_loss, 'acc': total_dice}
+    return {'loss': total_loss, 'dice:': total_dice}
 
 
 def main():
@@ -184,40 +184,42 @@ def main():
     path = pt.Path(exp_path)/dir
     path.mkdir(exist_ok=True)
 
-    network = UNet(n_channels=1, n_classes=2,
-                   final_activation=nn.Softmax(dim=1))
+    network = UNet(n_channels=1, n_classes=2,final_activation=nn.Softmax(dim=1))
 
     config = None
     with open('config.yaml') as f:  # reads .yml/.yaml files
         config = yaml.safe_load(f)
 
-    # geometrics = T.Compose([
-    #     T.ToPILImage(),
-    #     T.RandomRotation(degrees=random.randint(
-    #         config['train']['rotation_degrees_bottom'], config['train']['rotation_degrees_top'])),
-    #     T.RandomHorizontalFlip(config['train']['flip_probability']),
-    #     T.ToTensor(),
-    # ])
+    geometrics = T.Compose([
+        T.ToPILImage(),
+        T.RandomRotation(degrees=random.randint(
+            config['train']['rotation_degrees_bottom'], config['train']['rotation_degrees_top'])),
+        T.RandomHorizontalFlip(config['train']['flip_probability']),
+        T.ToTensor(),
+    ])
 
-    # pixels = T.Compose([
-    #     T.ToPILImage(),
-    #     T.GaussianBlur(kernel_size=(
-    #         config['train']['kernel_size']), sigma=config['train']['sigma']),
-    #     T.ToTensor(),
-    # ])
+    pixels = T.Compose([
+        T.ToPILImage(),
+        T.GaussianBlur(kernel_size=(
+            config['train']['kernel_size']), sigma=config['train']['sigma']),
+        T.ToTensor(),
+    ])
 
-    geometrics = TR.Compose([
-        TR.RandRotate(prob=config['train']['rotate_prob'], range_x=config['train']['rotate_range']),
-        TR.RandFlip(prob=config['train']['flip_prob'], spatial_axis=config['train']['flip_spatial_axis'] ),
+    # geometrics = TR.Compose([
+    #     TR.RandRotate(prob=config['train']['rotate_prob'], range_x=config['train']['rotate_range']),
+    #     TR.RandFlip(prob=config['train']['flip_prob'], spatial_axis=config['train']['flip_spatial_axis'] ),
+            
     
        
-    ])
+    # ])
 
-    pixels = TR.Compose([
-        TR.GaussianSmooth(sigma=config['train']['sigma']),
-        TR.RandSpatialCropSamples(num_samples=config['train']['rand_crop_samples'], roi_size=config['train']['rand_crop_size']),
+    # pixels = TR.Compose([
         
-    ])
+            
+    #     TR.GaussianSmooth(sigma=config['train']['sigma']),
+    #     TR.RandSpatialCropSamples(num_samples=config['train']['rand_crop_samples'], roi_size=config['train']['rand_crop_size']),
+        
+    # ])
     path_construct = glob.glob(config["data"]['data_path'])
     path_list = create_dataset_csv(path_construct)
     dataset_df = pd.DataFrame(path_list)
@@ -231,17 +233,13 @@ def main():
     dataset_df.to_csv(config['data']['dataset_csv'])
 
     train_df = dataset_df.loc[dataset_df["subset"] == "train"]
-    train_ds = AngioClass(
-        train_df, img_size=config['data']['img_size'], geometric_transforms=geometrics, pixel_transforms=pixels)
-    train_loader = torch.utils.data.DataLoader(
-        train_ds, batch_size=config['train']['bs'], shuffle=True)
+    train_ds = AngioClass(train_df, img_size=config['data']['img_size'], geometric_transforms=geometrics, pixel_transforms=pixels)
+    train_loader = torch.utils.data.DataLoader(train_ds, batch_size=config['train']['bs'], shuffle=True,)
     print(train_loader)
 
     valid_df = dataset_df.loc[dataset_df["subset"] == "valid", :]
-    valid_ds = AngioClass(
-        valid_df, img_size=config['data']['img_size'], geometric_transforms=geometrics, pixel_transforms=pixels)
-    valid_loader = torch.utils.data.DataLoader(
-        valid_ds, batch_size=config['train']['bs'], shuffle=False)
+    valid_ds = AngioClass(valid_df, img_size=config['data']['img_size'], geometric_transforms=geometrics, pixel_transforms=pixels)
+    valid_loader = torch.utils.data.DataLoader(valid_ds, batch_size=config['train']['bs'], shuffle=False)
 
     print(f"# Train: {len(train_ds)} # Valid: {len(valid_ds)}")
 
@@ -252,8 +250,7 @@ def main():
     elif config['train']['opt'] == 'SGD':
         opt = torch.optim.SGD(network.parameters(), lr=config['train']['lr'])
     elif config['train']['opt'] == "RMSprop":
-        opt = torch.optim.RMSprop(
-            network.parameters(), lr=config['train']['lr'])
+        opt = torch.optim.RMSprop(network.parameters(), lr=config['train']['lr'])
 
     history = train(network, train_loader, valid_loader, criterion, opt, epochs=config['train']['epochs'], thresh=config['test']['threshold'], weights_dir=path)
     plot_acc_loss(history, path)
