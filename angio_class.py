@@ -17,6 +17,7 @@ import torch.nn.functional as F
 import torchvision
 import torchvision.transforms as T
 import torchmetrics
+import monai.transforms as TR
 
 
 
@@ -26,6 +27,7 @@ class AngioClass(torch.utils.data.Dataset):
         self.img_size = tuple(img_size)
         self.geometric_transforms=geometric_transforms
         self.pixel_transforms=pixel_transforms
+        self.RandRotate=TR.RandRotate()
 
     def __len__(self):
 
@@ -37,7 +39,7 @@ class AngioClass(torch.utils.data.Dataset):
 
         frame_param = self.dataset_df['frames'][idx]
         new_img = img[frame_param]
-
+      
         new_img = cv2.resize(img[frame_param], self.img_size, interpolation=cv2.INTER_AREA)
         new_img = new_img*1/255
 
@@ -47,13 +49,18 @@ class AngioClass(torch.utils.data.Dataset):
         target = np.zeros(img.shape, dtype=np.uint8)
         target[frame_param] = cv2.circle(target[frame_param], [clipping_points[str(frame_param)][1], clipping_points[str(frame_param)][0]], 8, [255, 255, 255], -1)
         new_target = cv2.resize( target[frame_param], self.img_size, interpolation=cv2.INTER_AREA)
-
-        tensor_x = torch.from_numpy(new_img)
-        tensor_x= self.geometric_transforms(tensor_x)
-        tensor_x= self.pixel_transforms(tensor_x)
         
-        tensor_y=torch.from_numpy(new_target)
-        tensor_y=self.geometric_transforms(tensor_y)
+        x= np.expand_dims(new_img,axis=0)
+        
+        y = np.expand_dims(new_target, axis=0)
+        
+        tensor_x = torch.from_numpy(x)
+        #tensor_x= self.geometric_transforms(tensor_x)
+        #tensor_x= self.pixel_transforms(tensor_x)
+        
+        tensor_y=torch.from_numpy(y)
+        #tensor_y=self.geometric_transforms(tensor_y)
+    
         # plt.imshow(tensor_x[0], cmap="gray")
         # plt.show()
         # plt.imshow(tensor_y[0], cmap="gray")
