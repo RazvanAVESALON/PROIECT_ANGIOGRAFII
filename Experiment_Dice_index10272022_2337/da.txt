@@ -9,22 +9,15 @@ data:
     test: 0.1
 
 train:
-  bs:  4
-  lr: 0.001
+  bs:  8
+  lr: 0.0001
   opt: Adam
   epochs: 100
-  rotate_prob: 1
-  rotate_range: [1]
-  flip_prob : 1.0 
-  flip_spatial_axis: 1.0
-  rand_crop_samples: 4 
-  rand_crop_size: [100, 100, 100]
-  sigma: 1.0 
-  # sigma: [0.1,1] 
-  # kernel_size: [9, 9]
-  # rotation_degrees_top: 360
-  # rotation_degrees_bottom: 0
-  # flip_probability: 0.5
+  sigma: [0.1,1]
+  kernel_size: [9, 9]
+  rotation_degrees_top: 360 
+  rotation_degrees_bottom: 0
+  flip_probability: 0.5
 
 
 test:

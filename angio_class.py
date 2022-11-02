@@ -19,6 +19,7 @@ import torchvision.transforms as T
 import torchmetrics
 
 
+
 class AngioClass(torch.utils.data.Dataset):
     def __init__(self, dataset_df, img_size,geometric_transforms,pixel_transforms):
         self.dataset_df = dataset_df.reset_index(drop=True)
@@ -46,10 +47,10 @@ class AngioClass(torch.utils.data.Dataset):
         target = np.zeros(img.shape, dtype=np.uint8)
         target[frame_param] = cv2.circle(target[frame_param], [clipping_points[str(frame_param)][1], clipping_points[str(frame_param)][0]], 8, [255, 255, 255], -1)
         new_target = cv2.resize( target[frame_param], self.img_size, interpolation=cv2.INTER_AREA)
-     
+
         tensor_x = torch.from_numpy(new_img)
-        tensor_x = self.geometric_transforms(tensor_x)
-        tensor_x=  self.pixel_transforms(tensor_x)
+        tensor_x= self.geometric_transforms(tensor_x)
+        tensor_x= self.pixel_transforms(tensor_x)
         
         tensor_y=torch.from_numpy(new_target)
         tensor_y=self.geometric_transforms(tensor_y)
@@ -58,7 +59,7 @@ class AngioClass(torch.utils.data.Dataset):
         # plt.imshow(tensor_y[0], cmap="gray")
         # plt.show()
 
-        return tensor_x, tensor_y
+        return tensor_x, tensor_y.int()
 
 
 def plot_acc_loss(result,path):

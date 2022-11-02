@@ -1,0 +1,27 @@
+data:
+  annotation: clipping_points.json
+  data_path: E:\__RCA_bif_detection\data\*
+  dataset_csv: D:\ai intro\Angiografii\PROIECT_ANGIOGRAFII\CSV_angiografii.csv
+  img_size:
+  - 256
+  - 256
+  split_per:
+    test: 0.1
+    train: 0.8
+    valid: 0.1
+test:
+  threshold: 0.5
+train:
+  bs: 4
+  epochs: 100
+  flip_probability: 0.8
+  kernel_size:
+  - 9
+  - 9
+  lr: 0.001
+  opt: RMSprop
+  rotation_degrees_bottom: 0
+  rotation_degrees_top: 180
+  sigma:
+  - 0.1
+  - 1

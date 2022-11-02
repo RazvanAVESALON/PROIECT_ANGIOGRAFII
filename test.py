@@ -1,3 +1,4 @@
+from pickle import NONE
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -11,9 +12,10 @@ import torch.nn.functional as F
 import torchvision
 import torchvision.transforms as T
 import torchmetrics 
+
 from tqdm import tqdm
 from UNet import UNet
-
+from torchmetrics.functional import dice_score
 from configurare_data import create_dataset_csv , split_dataset
 from test_function import test
 from datetime import datetime
@@ -22,12 +24,14 @@ import cv2
 import glob
 from angio_class import AngioClass
 
+from torchmetrics import Dice
+
 
 def test(network, test_loader, thresh=0.5):
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     print(f"[INFO] Starting testing on device {device} ...")
 
-    metric = torchmetrics.Accuracy()
+    metric =  Dice(average='micro')
 
     network.eval()
     with tqdm(desc='test', unit=' batch', total=len(test_loader.dataset)) as pbar:
@@ -42,11 +46,11 @@ def test(network, test_loader, thresh=0.5):
             if 'cuda' in device.type:
                 current_predict = current_predict.cpu()
                 
-            acc = metric(current_predict, tgs.squeeze())
+            dice = metric(current_predict, tgs.squeeze())
             pbar.update(ins.shape[0])
         
-        acc = metric.compute()
-        print(f'[INFO] Test accuracy is {acc*100:.2f} %')
+        dice = metric.compute()
+        print(f'[INFO] Test accuracy is {dice*100:.2f} %')
 
 
 
@@ -59,11 +63,11 @@ def main():
         
     yml_data=yaml.dump(config)
     directory =f"Test{datetime.now().strftime('%m%d%Y_%H%M')}"
-    parent_dir =r'D:\ai intro\Angiografii\PROIECT_ANGIOGRAFII\Experiment_Dice_index10122022_1556'
-    path = os.path.join(parent_dir, directory)
-    os.mkdir(path)
+    parent_dir =r"D:\ai intro\Angiografii\PROIECT_ANGIOGRAFII\Experiment_Dice_index11012022_1644"
+    path=pt.Path(parent_dir)/directory
+    path.mkdir(exist_ok=True)
 
-    f= open(f"{path}\\yaml_config.txt","w+")
+    f= open(f"{path}\\yaml_config.yml","w+")
     f.write(yml_data)    
 
     path_construct=glob.glob(r"E:\__RCA_bif_detection\data\*")
@@ -75,11 +79,23 @@ def main():
     print (dataset_df.head(3))
     dataset_df.to_csv(r'D:\ai intro\Angiografii\PROIECT_ANGIOGRAFII\CSV_angiografii.csv')  
 
+    geometrics = T.Compose([
+            
+            T.ToPILImage(),
+            T.ToTensor(),
+    ])
+    
+    pixels=T.Compose([
+            
+            T.ToPILImage(),
+            T.ToTensor(),
+    ])
+    
     test_df = dataset_df.loc[dataset_df["subset"] == "test", :]
-    test_ds = AngioClass(test_df, img_size=config["data"]["img_size"])
+    test_ds = AngioClass(test_df, img_size=config["data"]["img_size"], geometric_transforms=geometrics,pixel_transforms=pixels)
     test_loader = torch.utils.data.DataLoader(test_ds, batch_size=config["train"]["bs"], shuffle=False)
-
-    network = torch.load(r"D:\ai intro\Angiografii\PROIECT_ANGIOGRAFII\Experiment_Dice_index10122022_1556\Weights\my_model10122022_1647_e5.pt")
+    
+    network = torch.load(r"D:\ai intro\Angiografii\PROIECT_ANGIOGRAFII\Experiment_Dice_index11012022_1644\Weights\my_model11012022_1932_e95.pt")
 
     print(f"# Test: {len(test_ds)}")
 
@@ -114,8 +130,11 @@ def main():
         axs[i][2].set_title('Prediction ')
         axs[i][2].imshow(pred, cmap='gray')
         
+        plt.savefig(f"{path}\\Măști") 
+    
+    
         
-    plt.savefig(f"{path}\\Măști")     
+        
 
 
        
