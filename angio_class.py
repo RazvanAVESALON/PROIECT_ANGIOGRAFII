@@ -18,21 +18,33 @@ import torchvision
 import torchvision.transforms as T
 import torchmetrics
 import monai.transforms as TR
+import torchvision.transforms.functional as TF 
 
-
+config = None
+with open('config.yaml') as f:  # reads .yml/.yaml files
+    config = yaml.safe_load(f)
 
 class AngioClass(torch.utils.data.Dataset):
-    def __init__(self, dataset_df, img_size,geometric_transforms,pixel_transforms):
+    def __init__(self, dataset_df, img_size,geometrics_transforms=None,pixel_transforms=None):
         self.dataset_df = dataset_df.reset_index(drop=True)
         self.img_size = tuple(img_size)
-        self.geometric_transforms=geometric_transforms
         self.pixel_transforms=pixel_transforms
-        self.RandRotate=TR.RandRotate()
+        self.geometrics_transforms=geometrics_transforms
 
     def __len__(self):
 
         return len(self.dataset_df)
-
+    
+    # def csvdata (self):
+        
+    #     for index in range(len(self.dataset_df)):
+    #         patient=self.dataset_df['patient'][index]
+    #         acquisition=self.dataset_df['acquisition'][index]
+    #         frame=self.dataset_df['frames'][index]
+        
+    #     print (frame)
+    #     return patient, acquisition, frame
+    
     def __getitem__(self, idx):
         img = np.load(self.dataset_df['images_path'][idx])['arr_0']
        
@@ -49,40 +61,55 @@ class AngioClass(torch.utils.data.Dataset):
         target = np.zeros(img.shape, dtype=np.uint8)
         target[frame_param] = cv2.circle(target[frame_param], [clipping_points[str(frame_param)][1], clipping_points[str(frame_param)][0]], 8, [255, 255, 255], -1)
         new_target = cv2.resize( target[frame_param], self.img_size, interpolation=cv2.INTER_AREA)
-        
-        x= np.expand_dims(new_img,axis=0)
-        
+        new_target = new_target/255
+         
+        x = np.expand_dims(new_img, axis=0)
         y = np.expand_dims(new_target, axis=0)
         
+        tensor_y = torch.from_numpy(y)
         tensor_x = torch.from_numpy(x)
-        #tensor_x= self.geometric_transforms(tensor_x)
-        #tensor_x= self.pixel_transforms(tensor_x)
+       
         
-        tensor_y=torch.from_numpy(y)
-        #tensor_y=self.geometric_transforms(tensor_y)
-    
+        if self.pixel_transforms != None:
+            
+            data_pixel = {"img": tensor_x}
+            tensor_x=self.pixel_transforms(data_pixel)["img"]
+                
+        
+        if self.geometrics_transforms != None:
+            data_geo = {"img": tensor_x, "seg": tensor_y}
+            result = self.geometrics_transforms(data_geo)
+        
+            tensor_x=result["img"]
+            tensor_y=result["seg"]
+
+ 
+        #print (tensor_x.min(),tensor_y.min(),tensor_x.max(),tensor_y.max())
+       
         # plt.imshow(tensor_x[0], cmap="gray")
         # plt.show()
-        # plt.imshow(tensor_y[0], cmap="gray")
+        # plt.imshow(tensor_y[0] , cmap="gray")
         # plt.show()
 
-        return tensor_x, tensor_y.int()
+        return tensor_x.float(), tensor_y.int()
+    
+    
 
 
 def plot_acc_loss(result,path):
-    acc = result['acc']['train']
+    acc = result['dice']['train']
     loss = result['loss']['train']
-    val_acc = result['acc']['valid']
+    val_acc = result['dice']['valid']
     val_loss = result['loss']['valid']
     
     plt.figure(figsize=(15, 5))
     plt.subplot(121)
     plt.plot(acc, label='Train')
     plt.plot(val_acc, label='Validation')
-    plt.title('Accuracy', size=15)
+    plt.title('DICE', size=15)
     plt.legend()
     plt.grid(True)
-    plt.ylabel('Accuracy')
+    plt.ylabel('DICE')
     plt.xlabel('Epoch')
     
     plt.subplot(122)
