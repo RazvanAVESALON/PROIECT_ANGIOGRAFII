@@ -18,13 +18,13 @@ from configurare_data import create_dataset_csv, split_dataset
 from datetime import datetime
 from angio_class import AngioClass, plot_acc_loss
 import glob
-from monai.losses.dice import DiceLoss
+from monai.losses import DiceCELoss , DiceLoss
 from monai.metrics import DiceMetric , compute_meandice
+from monai.data import DataLoader , ArrayDataset , ImageDataset
 import gc
 from torchmetrics import Dice
 import monai
-
-
+import matplotlib.pyplot as plt 
 # class DiceIndex(torch.nn.Module):
 #     def __init__(self):
 #         super(DiceIndex, self).__init__()
@@ -64,7 +64,7 @@ def train(network, train_loader, valid_loader, criterion, opt, epochs, thresh=0.
         'valid': valid_loader
     }
 
-    metric = Dice(average='micro')
+    metric = Dice(average='samples')
     
     network.to(device)
     criterion.to(device)
@@ -86,17 +86,25 @@ def train(network, train_loader, valid_loader, criterion, opt, epochs, thresh=0.
             with tqdm(desc=phase, unit=' batch', total=len(loaders[phase].dataset)) as pbar:
                 for data in loaders[phase]:
                     ins, tgs = data
+                    #print(data)
+                    #print(type(ins), type(tgs))
                     ins = ins.to(device)
                     tgs = tgs.to(device)
+                    
                     #print (ins.size(),tgs.size())
+                    
                     # seteaza toti gradientii la zero, deoarece PyTorch acumuleaza valorile lor dupa mai multe backward passes
                     opt.zero_grad()
 
                     with torch.set_grad_enabled(phase == 'train'):
                         # se face forward propagation -> se calculeaza predictia
+                        #plt.imshow(ins[0][0].cpu(),cmap='gray')
+                        #plt.show()
                         output = network(ins)
-                        # print(tgs.size())
-                        # print(output.size())
+                        
+                        #plt.imshow(output[0][0].cpu().detach().numpy(),cmap='gray')
+                        #plt.show()
+                        #print(output.size())
 
                         #second_output = Variable(torch.argmax(output,1).float(),requires_grad=True).cuda()
                         # output[:, 1, :, :] #=> 8 x 128 x 128
@@ -111,6 +119,9 @@ def train(network, train_loader, valid_loader, criterion, opt, epochs, thresh=0.
                         current_predict[current_predict >= thresh] = 1.0
                         current_predict[current_predict < thresh] = 0.0
 
+                        #plt.imshow(current_predict[0].cpu().detach().numpy(), cmap='gray')
+                        #plt.show()
+                        
                         if 'cuda' in device.type:
                             current_predict = current_predict.cpu()
                             current_target = tgs.cpu().type(torch.int).squeeze()
@@ -118,9 +129,16 @@ def train(network, train_loader, valid_loader, criterion, opt, epochs, thresh=0.
                             current_predict = current_predict
                             current_target = tgs.type(torch.int).squeeze()
 
-                        # print(current_predict.shape, current_target.shape)
-                        # print(current_predict.dtype, current_target.dtype)
+                        #plt.imshow(current_target[0].cpu().detach().numpy())
+                        #plt.show()
+                        
+                        #print(current_predict.shape, current_target.shape)
+                        #print(current_predict.dtype, current_target.dtype)
+                        
                         dice_idx = metric(current_predict, current_target)
+                    
+                        #print(dice_idx, dice_idx.shape, dice_idx.dtype )
+                        #print(current_predict,current_target)
                         # print(f"\tAcc on batch {i}: {acc}")
 
                         if phase == 'train':
@@ -129,10 +147,13 @@ def train(network, train_loader, valid_loader, criterion, opt, epochs, thresh=0.
                             # se actualizează weights-urile
                             opt.step()
 
+                    
                     running_loss += loss.item() * ins.size(0)
-
+                 
                     running_average += dice_idx.item() * ins.size(0)
-                    # print(running_loss, loss.item())
+                    
+                    #print(running_average, dice_idx.item())
+                    #print(running_loss, loss.item())
 
                     if phase == 'valid':
                         # salvam ponderile modelului dupa fiecare epoca
@@ -150,19 +171,17 @@ def train(network, train_loader, valid_loader, criterion, opt, epochs, thresh=0.
                     pbar.update(ins.shape[0])
 
                 # Calculam loss-ul pt toate batch-urile dintr-o epoca
-                total_loss[phase].append(
-                    running_loss/len(loaders[phase].dataset))
+                total_loss[phase].append(running_loss/len(loaders[phase].dataset))
 
                 # Calculam acuratetea pt toate batch-urile dintr-o epoca
-                total_dice[phase].append(
-                    (running_average/len(loaders[phase].dataset)))
+                total_dice[phase].append(running_average/len(loaders[phase].dataset))
 
                 postfix = f'error {total_loss[phase][-1]:.4f} dice {dice_idx*100:.2f}%'
                 pbar.set_postfix_str(postfix)
 
                 # Resetam pt a acumula valorile dintr-o noua epoca
 
-    return {'loss': total_loss, 'dice:': total_dice}
+    return {'loss': total_loss, 'dice': total_dice}
 
 
 def main():
@@ -189,61 +208,54 @@ def main():
     config = None
     with open('config.yaml') as f:  # reads .yml/.yaml files
         config = yaml.safe_load(f)
+    yml_data=yaml.dump(config)
+    f= open(f"{path}\\yaml_config.yml","w+")
+    f.write(yml_data)    
 
-    geometrics = T.Compose([
-        T.ToPILImage(),
-        T.RandomRotation(degrees=random.randint(
-            config['train']['rotation_degrees_bottom'], config['train']['rotation_degrees_top'])),
-        T.RandomHorizontalFlip(config['train']['flip_probability']),
-        T.ToTensor(),
-    ])
+
 
     pixels = T.Compose([
-        T.ToPILImage(),
-        T.GaussianBlur(kernel_size=(
-            config['train']['kernel_size']), sigma=config['train']['sigma']),
-        T.ToTensor(),
+    
+        TR.ToTensord(keys="img"),
     ])
 
-    # geometrics = TR.Compose([
-    #     TR.RandRotate(prob=config['train']['rotate_prob'], range_x=config['train']['rotate_range']),
-    #     TR.RandFlip(prob=config['train']['flip_prob'], spatial_axis=config['train']['flip_spatial_axis'] ),
-            
+    pixel_t = TR.Compose([
+        TR.GaussianSmoothd(keys="img",sigma=config['train']['sigma']),   
+    ])
     
-       
-    # ])
-
-    # pixels = TR.Compose([
+    geometric_t = TR.Compose([
         
-            
-    #     TR.GaussianSmooth(sigma=config['train']['sigma']),
-    #     TR.RandSpatialCropSamples(num_samples=config['train']['rand_crop_samples'], roi_size=config['train']['rand_crop_size']),
-        
-    # ])
-    path_construct = glob.glob(config["data"]['data_path'])
-    path_list = create_dataset_csv(path_construct)
-    dataset_df = pd.DataFrame(path_list)
+        TR.RandRotated(keys=["img", "seg"], prob=config['train']['rotate_prob'], range_x=config['train']['rotate_range'], mode=['bilinear','nearest']),
+        TR.RandFlipd(keys=["img", "seg"],prob=config['train']['flip_prob'], spatial_axis=config['train']['flip_spatial_axis'] ),
+        TR.RandZoomd(keys=["img", "seg"],prob=config['train']['zoom_prob'],min_zoom=config['train']['min_zoom'],max_zoom=config['train']['max_zoom'])
+        #TR.RandSpatialCropSamplesd(keys=["img", "seg"],num_samples=config['train']['rand_crop_samples'], roi_size=config['train']['rand_crop_size'],random_size=False),
+    ])
 
-    dataset_df.to_csv(config['data']['dataset_csv'])
+   
+    #path_construct = glob.glob(config["data"]['data_path'])
+    #path_list = create_dataset_csv(path_construct)
+    #dataset_df = pd.DataFrame(path_list)
 
-    dataset_df = split_dataset(
-        dataset_df, split_per=config['data']['split_per'], seed=1)
-    print(dataset_df.head(3))
+    #dataset_df.to_csv(config['data']['dataset_csv'])
 
-    dataset_df.to_csv(config['data']['dataset_csv'])
+    #dataset_df = split_dataset(dataset_df, split_per=config['data']['split_per'], seed=1)
+    #print(dataset_df.head(3))
 
+    dataset_df=pd.read_csv(config['data']['dataset_csv'])
+
+     
     train_df = dataset_df.loc[dataset_df["subset"] == "train"]
-    train_ds = AngioClass(train_df, img_size=config['data']['img_size'], geometric_transforms=geometrics, pixel_transforms=pixels)
+    train_ds = AngioClass(train_df, img_size=config['data']['img_size'],geometrics_transforms=geometric_t, pixel_transforms=pixel_t)
     train_loader = torch.utils.data.DataLoader(train_ds, batch_size=config['train']['bs'], shuffle=True,)
     print(train_loader)
 
     valid_df = dataset_df.loc[dataset_df["subset"] == "valid", :]
-    valid_ds = AngioClass(valid_df, img_size=config['data']['img_size'], geometric_transforms=geometrics, pixel_transforms=pixels)
+    valid_ds = AngioClass(valid_df, img_size=config['data']['img_size'], pixel_transforms=pixels)
     valid_loader = torch.utils.data.DataLoader(valid_ds, batch_size=config['train']['bs'], shuffle=False)
 
     print(f"# Train: {len(train_ds)} # Valid: {len(valid_ds)}")
 
-    criterion = DiceLoss()
+    criterion = DiceCELoss(softmax=True)
 
     if config['train']['opt'] == 'Adam':
         opt = torch.optim.Adam(network.parameters(), lr=config['train']['lr'])
