@@ -19,10 +19,10 @@ from datetime import datetime
 from angio_class import AngioClass, plot_acc_loss
 import glob
 from monai.losses import DiceCELoss , DiceLoss
-from monai.metrics import DiceMetric , compute_meandice
+from monai.metrics import DiceMetric , compute_meandice, MSEMetric
 from monai.data import DataLoader , ArrayDataset , ImageDataset
 import gc
-from torchmetrics import Dice
+from torchmetrics import Dice, MeanSquaredError
 import monai
 import matplotlib.pyplot as plt 
 # class DiceIndex(torch.nn.Module):
@@ -64,8 +64,7 @@ def train(network, train_loader, valid_loader, criterion, opt, epochs, thresh=0.
         'valid': valid_loader
     }
 
-    metric = Dice(average='samples')
-    
+    metric = MeanSquaredError()
     network.to(device)
     criterion.to(device)
 
@@ -90,7 +89,6 @@ def train(network, train_loader, valid_loader, criterion, opt, epochs, thresh=0.
                     #print(type(ins), type(tgs))
                     ins = ins.to(device)
                     tgs = tgs.to(device)
-                    
                     #print (ins.size(),tgs.size())
                     
                     # seteaza toti gradientii la zero, deoarece PyTorch acumuleaza valorile lor dupa mai multe backward passes
@@ -101,7 +99,7 @@ def train(network, train_loader, valid_loader, criterion, opt, epochs, thresh=0.
                         #plt.imshow(ins[0][0].cpu(),cmap='gray')
                         #plt.show()
                         output = network(ins)
-                        
+                   
                         #plt.imshow(output[0][0].cpu().detach().numpy(),cmap='gray')
                         #plt.show()
                         #print(output.size())
@@ -112,13 +110,15 @@ def train(network, train_loader, valid_loader, criterion, opt, epochs, thresh=0.
                         # tgs.squeeze() #=> 8 x 128 x 128
 
                         # se calculeaza eroarea/loss-ul
-                        loss = criterion(output[:, 1, :, :], tgs.squeeze())
+                       
+                       
+                        loss = criterion( output[:, :, :, :], tgs)
 
                         # deoarece reteaua nu include un strat de softmax, predictia finala trebuie calculata manual
                         current_predict = F.softmax(output, dim=1)[:, 1].float()
                         current_predict[current_predict >= thresh] = 1.0
                         current_predict[current_predict < thresh] = 0.0
-
+                        
                         #plt.imshow(current_predict[0].cpu().detach().numpy(), cmap='gray')
                         #plt.show()
                         
@@ -136,6 +136,7 @@ def train(network, train_loader, valid_loader, criterion, opt, epochs, thresh=0.
                         #print(current_predict.dtype, current_target.dtype)
                         
                         dice_idx = metric(current_predict, current_target)
+                        print (dice_idx.item)
                     
                         #print(dice_idx, dice_idx.shape, dice_idx.dtype )
                         #print(current_predict,current_target)
@@ -221,6 +222,8 @@ def main():
 
     pixel_t = TR.Compose([
         TR.GaussianSmoothd(keys="img",sigma=config['train']['sigma']),   
+        TR.RandGibbsNoised(keys="img",prob=config['train']['gibbs_noise_prob'],alpha=config['train']['alpha']),
+        TR.RandAdjustContrastd(keys="img",prob=config['train']['contrast_prob'],gamma=config['train']['contrast_gamma']),
     ])
     
     geometric_t = TR.Compose([
@@ -232,16 +235,17 @@ def main():
     ])
 
    
-    #path_construct = glob.glob(config["data"]['data_path'])
-    #path_list = create_dataset_csv(path_construct)
-    #dataset_df = pd.DataFrame(path_list)
+    path_construct = glob.glob(config["data"]['data_path'])
+    path_list = create_dataset_csv(path_construct)
+    dataset_df = pd.DataFrame(path_list)
 
-    #dataset_df.to_csv(config['data']['dataset_csv'])
+    
 
-    #dataset_df = split_dataset(dataset_df, split_per=config['data']['split_per'], seed=1)
-    #print(dataset_df.head(3))
+    dataset_df = split_dataset(dataset_df, split_per=config['data']['split_per'], seed=1)
+    print(dataset_df.head(3))
+    dataset_df.to_csv(config['data']['dataset_csv'])
 
-    dataset_df=pd.read_csv(config['data']['dataset_csv'])
+    #dataset_df=pd.read_csv(config['data']['dataset_csv'])
 
      
     train_df = dataset_df.loc[dataset_df["subset"] == "train"]
@@ -250,12 +254,12 @@ def main():
     print(train_loader)
 
     valid_df = dataset_df.loc[dataset_df["subset"] == "valid", :]
-    valid_ds = AngioClass(valid_df, img_size=config['data']['img_size'], pixel_transforms=pixels)
+    valid_ds = AngioClass(valid_df, img_size=config['data']['img_size'], geometrics_transforms=geometric_t)
     valid_loader = torch.utils.data.DataLoader(valid_ds, batch_size=config['train']['bs'], shuffle=False)
 
     print(f"# Train: {len(train_ds)} # Valid: {len(valid_ds)}")
 
-    criterion = DiceCELoss(softmax=True)
+    criterion = DiceCELoss(to_onehot_y=True,batch=config['train']['bs'])
 
     if config['train']['opt'] == 'Adam':
         opt = torch.optim.Adam(network.parameters(), lr=config['train']['lr'])
