@@ -21,7 +21,7 @@ from UNet import UNet
 
 
 def create_dataset_csv(path_construct):
-    path_list={"images_path":[],"annotations_path":[],"frames":[],"patient":[],"acquisition":[]}
+    path_list={"images_path":[],"annotations_path":[],"frames":[],"patient":[],"acquisition":[],"angio_loader_header":[]}
     #frame_list={"frames"}
 
     for patient in path_construct:
@@ -33,6 +33,7 @@ def create_dataset_csv(path_construct):
         for acquisiton in x:
             img=os.path.join(acquisiton,"frame_extractor_frames.npz")
             annotations=os.path.join(acquisiton,"clipping_points.json")
+            angio_leader=os.path.join(acquisiton,"angio_loader_header.json")
             with open (annotations) as f :
                 clipping_points=json.load(f)
 
@@ -44,6 +45,7 @@ def create_dataset_csv(path_construct):
                 path_list['frames'].append(frame_int)
                 path_list['patient'].append(os.path.basename(patient))
                 path_list['acquisition'].append(os.path.basename(acquisiton))
+                path_list['angio_loader_header'].append(angio_leader)
         
             
 
