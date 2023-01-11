@@ -19,7 +19,7 @@ import torchvision.transforms as T
 import torchmetrics
 import monai.transforms as TR
 import torchvision.transforms.functional as TF 
-
+from skimage.color import gray2rgb 
 config = None
 with open('config.yaml') as f:  # reads .yml/.yaml files
     config = yaml.safe_load(f)
@@ -41,10 +41,12 @@ class AngioClass(torch.utils.data.Dataset):
         patient=self.dataset_df['patient'][idx]
         acquisition=self.dataset_df['acquisition'][idx]
         frame=self.dataset_df['frames'][idx]
+        header=self.dataset_df['angio_loader_header'][idx]
+        annotations=self.dataset_df['annotations_path'][idx]
         
-        print (frame)
-        return patient, acquisition, frame
+        return patient, acquisition, frame , header ,annotations
     
+ 
     def crop_colimator(self, frame,gt, info):
         img = frame.astype(np.float32)
         in_min = 0
@@ -62,8 +64,7 @@ class AngioClass(torch.utils.data.Dataset):
         img_c = img[..., img_edge[2]:img_edge[3]+1, img_edge[0]:img_edge[1]+1]
         new_gt=gt[..., img_edge[2]:img_edge[3]+1, img_edge[0]:img_edge[1]+1]
         
-        return img_c,new_gt 
-        
+        return img_c,new_gt         
 
     
     def __getitem__(self, idx):
@@ -86,9 +87,9 @@ class AngioClass(torch.utils.data.Dataset):
         
         new_target = new_target/255
         new_img = new_img*1/255
-         
-        x = np.expand_dims(new_img, axis=0)
-        y = np.expand_dims(new_target, axis=0)
+        
+        x=np.expand_dims(new_img, axis=0)
+        y=np.expand_dims(new_target, axis=0)
         
         tensor_y = torch.from_numpy(y)
         tensor_x = torch.from_numpy(x)
@@ -115,7 +116,7 @@ class AngioClass(torch.utils.data.Dataset):
         #plt.imshow(tensor_y[0] , cmap="gray")
         #plt.show()
 
-        return tensor_x.float(), tensor_y.int()
+        return tensor_x.float(), tensor_y.int() , idx
     
     
 
