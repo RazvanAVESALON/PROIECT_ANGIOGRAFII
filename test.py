@@ -3,16 +3,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import pathlib as pt
-import random
 import yaml
 import cv2
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
-import torchvision
-import torchvision.transforms as T
-import torchmetrics 
-
 from tqdm import tqdm
 from UNet import UNet
 from torchmetrics.functional import dice_score
@@ -26,7 +20,10 @@ from angio_class import AngioClass
 from monai.metrics import MSEMetric
 from torchmetrics import Dice , MeanSquaredError
 import skimage.color
-
+from blob_detector import  blob_detector
+from distances import mm2pixels,pixels2mm,calcuate_distance
+import json
+import imageio
 # def (dataset_df):
     
 #     for i in range()
@@ -96,6 +93,9 @@ def overlap_3_chanels(gt , pred , input ):
     
 def  dice_histogram_maker(dice_forground,dice_background, path):
 
+
+    plt.clf()
+    
     plt.hist(dice_forground , [0.0,0.1,0.2,0.3,0.4, 0.5,0.6,0.7,0.8,0.9,1.0] )
     plt.title('Frames per Image' )
     plt.xlabel('Dice Values per interval')
@@ -124,16 +124,20 @@ def test(network, test_loader,dataframe, thresh=0.5):
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     print(f"[INFO] Starting testing on device {device} ...")
 
-    metric =  MeanSquaredError()
-    
-    #dict={'Dice_background':[],'Dice_forground':[]}
+    metric =  Dice(average= 'none', num_classes=2)
 
-    mse_column={'MSE':[]}
+    dict={'Dice_background':[],'Dice_forground':[],'Distance':[] ,'Ann':[] ,'ImageSpacing':[],'MagnificationFactor':[],'Header':[],'Patient':[],'Acquistion':[],'Frame':[]}
+
+    #mse_column={'MSE':[]}
     network.eval()
     with tqdm(desc='test', unit=' batch', total=len(test_loader.dataset)) as pbar:
         
-        for data in test_loader:
-            ins, tgs= data
+        #print (test_loader.dataset[100])
+        for data in test_loader :
+            
+            ins, tgs, index = data
+            print(index)
+
             network.to(device)
             ins = ins.to(device)
             tgs = tgs.to('cpu')
@@ -141,30 +145,70 @@ def test(network, test_loader,dataframe, thresh=0.5):
          
             current_predict = (F.softmax(output, dim=1)[:, 1] > thresh)
 
-           
+            
             if 'cuda' in device.type:
                 current_predict = current_predict.cpu()
             
             #print (current_predict.shape, tgs.shape)
             
             for batch_idx, (frame_pred ,target_pred) in enumerate(zip(current_predict , tgs)): 
-                frame_pred = frame_pred.int()    
-                mse = metric(frame_pred, target_pred.squeeze())
                 
-                #dice_CSV['Dice'].append(test_loader.dataset.csvdata())
-                mse_column['MSE'].append(mse.item())
-                #dict['Dice_forground'].append(dice[1].item())
+                frame_pred = frame_pred.int()    
+                dice_score = metric(frame_pred, target_pred.squeeze())
+                #print (dice)
+                #print (frame_pred.index)
+                
+                
+                patient, acquisition, frame , header, annotations= test_loader.dataset.csvdata((index[batch_idx].numpy()))
+                #print(header)
+                
+                with open(annotations) as g:
+                    ann = json.load(g)
+                
+                
+                with open(header) as f:
+                    angio_loader = json.load(f)
+                
+                #print (target_pred.max(),target_pred.shape,target_pred.dtype)
+                pred_cord=blob_detector(frame_pred.numpy())
+                gt_cord=blob_detector(target_pred[0].numpy())
+                
+                #print("Index",index[step])
+                #print(patient,frame)
+                #print (ann[f'{frame}'])
+                #gt_coords={'x':[ann[str(frame)][0]], 'y':[ann[str(frame)][1]]}
+               # print(gt_coords, pred_cord)
+                gt_coords_mm=pixels2mm(gt_cord,angio_loader['MagnificationFactor'],angio_loader['ImageSpacing'])
+                pred_cord_mm=pixels2mm(pred_cord,angio_loader['MagnificationFactor'],angio_loader['ImageSpacing'])
+                #print('coord in mm ',pred_cord_mm,gt_coords_mm)
+                if pred_cord_mm['x']==[] and pred_cord_mm['y']==[]:
+                    dict['Distance'].append( str("Can't calculate Distance For this frame ( No prediction )" ) )
+                else:
+                    distance=calcuate_distance(gt_coords_mm,pred_cord_mm)
+                    dict['Distance'].append(distance)
+               
+                dict['Dice_forground'].append(dice_score[1].item())
+                dict['Dice_background'].append(dice_score[0].item())
+                dict['Patient'].append(patient)
+                dict['Acquistion'].append(acquisition)
+                dict['Frame'].append(frame)
+                dict['Header'].append(angio_loader)
+                dict['ImageSpacing'].append(angio_loader['ImageSpacing'])
+                dict['MagnificationFactor'].append(angio_loader['MagnificationFactor'])
+                dict['Ann'].append(ann[f'{frame}'])
+                
+                #dict['Distance'].append()
                 
               
             pbar.update(ins.shape[0])
         
-        mse = metric.compute()
+        dice_score = metric.compute()
         
-        print(f'[INFO] Test MSE score is {mse*100:.2f} %')
-        dataframe['MSE']=mse_column['MSE']
-        #dataframe['Dice_background']=dict['Dice_background']
-        #dataframe['Dice_forground']=dict['Dice_forground']
-        return dataframe
+        
+        print(f'[INFO] Test Dice score is {dice_score[1]*100:.2f} %')
+        #dataframe['MSE']=mse_column['MSE']
+        
+        return dict
    
 def main():
     
@@ -177,7 +221,16 @@ def main():
     parent_dir =r"D:\ai intro\Angiografii\PROIECT_ANGIOGRAFII\Experiment_Dice_index11282022_1227"
     path=pt.Path(parent_dir)/directory
     path.mkdir(exist_ok=True)
-
+    dir=r'Predictii_Overlap'
+    
+    dir_2=r'Gif_prediction_overlap'
+    gif_path=pt.Path(path)/dir_2
+    gif_path.mkdir(exist_ok=True)
+    
+    overlap_pred_path=pt.Path(path)/dir
+    overlap_pred_path.mkdir(exist_ok=True)
+    
+    
     f= open(f"{path}\\yaml_config.yml","w+")
     f.write(yml_data)    
     f.close()
@@ -198,24 +251,60 @@ def main():
     
     test_loader = torch.utils.data.DataLoader(test_ds, batch_size=config["train"]["bs"], shuffle=False)
     
-    
-    #print (AngioClass.__csvdata__())
-    
     network = torch.load(r"D:\ai intro\Angiografii\PROIECT_ANGIOGRAFII\Experiment_Dice_index11282022_1227\Weights\Weights_my_model11292022_0156_e400.pt")
 
     #print(f"# Test: {len(test_ds)}")
 
 
     test_set_CSV=test(network, test_loader,test_df, thresh=config['test']['threshold'])
+    dataf=pd.DataFrame(test_set_CSV)
+    
+    
+    dice_histogram_maker(test_set_CSV['Dice_forground'],test_set_CSV['Dice_background'],path)
+    mean_dice=[]
+    mean_distance=[]
+    
+    patients= dataf['Patient'].unique()
+    print (patients)
+    for patient in patients:
+        dataf_patient=dataf.loc[dataf["Patient"] == patient]
+        print(dataf_patient)
+        sum_dice=0
+        sum_distance=0
+        for index  in dataf_patient.index:
+            sum_dice += dataf_patient['Dice_forground'][index]
+            print(len(dataf_patient['Distance'][index]))
+            if  dataf_patient['Distance'][index] == "Can't calculate Distance For this frame ( No prediction )":
+                sum_distance+=-1
+               
+            else:
+                if len(dataf_patient['Distance'][index])>1:
+                    for distance in dataf_patient['Distance'][index]:
+                        print (sum_distance)
+                        sum_distance = sum_distance + distance
+                else: 
+                    sum_distance += dataf_patient['Distance'][index][0]
+
+        print (type (dataf_patient),len(dataf_patient))
+        print (sum_dice, sum_distance)
+        m_dice=(sum_dice)/(len(dataf_patient.index))
+        m_distance=sum_distance/(len(dataf_patient.index))
+        for i in range(len(dataf_patient.index)):
+            mean_dice.append(m_dice)
+            mean_distance.append(m_distance)
+            
+
    
-    test_set_CSV.to_csv(f"{path}\\CSV_TEST.csv")
+    dataf["MeanDice"]=mean_dice
+    dataf["MeanDIstance"]=mean_distance
+   
     
-    mse_histogram_maker(test_set_CSV['MSE'],path)
-    
-
-
+    overlap_path=[]
+    prediction_path=[]
     for batch_index,batch in enumerate(test_loader):
-        x, y = iter(batch)
+        x, y , index= iter(batch)
+        
+        index=index.numpy()
         
         network.eval()
         x=x.type(torch.cuda.FloatTensor)
@@ -232,13 +321,12 @@ def main():
             pred[pred > config['test']['threshold']] = 1
             pred[pred <= config['test']['threshold']] = 0    
             
-           
             np_input=input.cpu().detach().numpy()
             np_gt=gt.cpu().detach().numpy()
+            
            
-          
             #print (pred.shape,input.shape)
-            print(np_gt.dtype,np_gt.shape, np_gt.min(),np_gt.max())
+            #print(np_gt.dtype,np_gt.shape, np_gt.min(),np_gt.max())
             #dst=overlap(np_input[0],pred)
             overlap_colors = overlap_3_chanels(np_gt[0] , pred , np_input[0])
             
@@ -253,9 +341,43 @@ def main():
             # plt.savefig(f"{path}\\OVERLAP_frame{batch_index}_{step}.png") 
             
             #cv2.imwrite(os.path.join(path, 'OVERLAP'+'_'+str(batch_index)+'_'+str(step)+'.png'),dst)
-            cv2.imwrite(os.path.join(path, 'OVERLAP_Colored'+'_'+str(batch_index)+'_'+str(step)+'.png'),overlap_colors)
-            cv2.imwrite(os.path.join(path, 'PREDICTIE'+'_'+str(batch_index)+'_'+str(step)+'.png'),pred*255)
-           
+            overlap_path.append(os.path.join(overlap_pred_path, 'OVERLAP_Colored'+'_'+str(test_set_CSV['Patient'][index[step]])+'_'+str(test_set_CSV['Acquistion'][index[step]])+'-'+str(test_set_CSV['Frame'][index[step]])+'.png'))
+            prediction_path.append(os.path.join(overlap_pred_path, 'PREDICTIE'+'_'+str(test_set_CSV['Patient'][index[step]])+'_'+str(test_set_CSV['Acquistion'][index[step]])+'-'+str(test_set_CSV['Frame'][index[step]])+'.png'))
+            cv2.imwrite(os.path.join(overlap_pred_path, 'OVERLAP_Colored'+'_'+str(test_set_CSV['Patient'][index[step]])+'_'+str(test_set_CSV['Acquistion'][index[step]])+'-'+str(test_set_CSV['Frame'][index[step]])+'.png'),overlap_colors)
+            cv2.imwrite(os.path.join(overlap_pred_path, 'PREDICTIE'+'_'+str(test_set_CSV['Patient'][index[step]])+'_'+str(test_set_CSV['Acquistion'][index[step]])+'-'+str(test_set_CSV['Frame'][index[step]])+'.png'),pred*255)
        
+    dataf["OVERLAP_path"]=overlap_path
+    dataf["PREDICTIE_path"]=prediction_path
+     
+    acquistions = dataf['Acquistion'].unique()
+    print (patients)
+    for acquistion in acquistions:
+        dataf_ac=dataf.loc[dataf["Acquistion"] == acquistion]
+        print(dataf_ac)
+        movie_overlap_gif=[]
+        movie_predictie_gif=[]
+        for index in dataf_ac.index: 
+            dice_forground=dataf_ac['Dice_forground'][index]
+            distance=dataf_ac['Distance'][index]
+            frame=imageio.imread(dataf_ac['OVERLAP_path'][index])
+            pred=imageio.imread(dataf_ac['PREDICTIE_path'][index])
+            foo_Overlap=cv2.putText(frame,f'{dice_forground}',(5, 25),cv2.FONT_HERSHEY_SIMPLEX,.4,(255, 255, 255))
+            foo_pred=cv2.putText(frame,f'{dice_forground}',(5, 25),cv2.FONT_HERSHEY_SIMPLEX,.4,(255, 255, 255))
+            foo_Overlap=cv2.putText(foo_Overlap,f'{distance}',(5, 475),cv2.FONT_HERSHEY_SIMPLEX,.4,(255, 255, 255))
+            foo_pred=cv2.putText(foo_pred,f'{distance}',(5, 475),cv2.FONT_HERSHEY_SIMPLEX,.4,(255, 255, 255))
+            movie_overlap_gif.append(foo_Overlap)
+            movie_predictie_gif.append(foo_pred)
+
+        
+        imageio.mimsave(os.path.join(gif_path, 'OVERLAP_GIF'+'_'+str(acquistion)+'.gif'), movie_overlap_gif,duration=1)
+        imageio.mimsave(os.path.join(gif_path, 'PREDICTIE_GIF'+'_'+str(acquistion)+'.gif'), movie_predictie_gif,duration=1)
+            
+    
+    
+    
+    
+    dataf.to_csv(f"{path}\\CSV_TEST.csv")
+    
+   
 if __name__ == "__main__":
     main()
