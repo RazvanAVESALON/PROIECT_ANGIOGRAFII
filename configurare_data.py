@@ -20,6 +20,8 @@ from tqdm import tqdm
 from UNet import UNet
 
 
+    
+
 def create_dataset_csv(path_construct):
     path_list={"images_path":[],"annotations_path":[],"frames":[],"patient":[],"acquisition":[],"angio_loader_header":[]}
     #frame_list={"frames"}
