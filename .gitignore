@@ -31,3 +31,10 @@ Experiment_Dice_index11102022_2335/Weights/yaml_config.yml
 *.zip
 *.csv
 *.yml
+*.gif
+*.rar
+*.csv
+*.exe
+ModifyCSV.py
+*.7z
+gif_maker.py
