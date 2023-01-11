@@ -25,6 +25,7 @@ import gc
 from torchmetrics import Dice, MeanSquaredError
 import monai
 import matplotlib.pyplot as plt 
+from comet_ml import Experiment
 # class DiceIndex(torch.nn.Module):
 #     def __init__(self):
 #         super(DiceIndex, self).__init__()
@@ -52,7 +53,8 @@ import matplotlib.pyplot as plt
 
 # def split_frames(image,annotation):
 
-def train(network, train_loader, valid_loader, criterion, opt, epochs, thresh=0.5, weights_dir='weights', save_every_ep=5):
+def train(network, train_loader, valid_loader, criterion, opt, epochs, thresh=0.5, weights_dir='weights', save_every_ep=10):
+    
     total_loss = {'train': [], 'valid': []}
     total_dice = {'train': [], 'valid': []}
 
@@ -84,7 +86,7 @@ def train(network, train_loader, valid_loader, criterion, opt, epochs, thresh=0.
 
             with tqdm(desc=phase, unit=' batch', total=len(loaders[phase].dataset)) as pbar:
                 for data in loaders[phase]:
-                    ins, tgs = data
+                    ins, tgs, idx = data
                     #print(data)
                     #print(type(ins), type(tgs))
                     ins = ins.to(device)
@@ -179,6 +181,8 @@ def train(network, train_loader, valid_loader, criterion, opt, epochs, thresh=0.
 
                 postfix = f'error {total_loss[phase][-1]:.4f} dice {dice_idx*100:.2f}%'
                 pbar.set_postfix_str(postfix)
+                
+                experiment.log_metrics({f"{phase}_dice": total_dice[phase][-1], "loss": total_loss[-1]}, epoch=ep)
 
                 # Resetam pt a acumula valorile dintr-o noua epoca
 
@@ -190,12 +194,13 @@ def main():
     print(f"torchvision version {torchvision.__version__}")
     print(f"torchmetrics version {torchmetrics.__version__}")
     print(f"CUDA available {torch.cuda.is_available()}")
-    gc.collect()
+    
+    experiment = Experiment(
+    api_key="wwQKu3dl9l1bRZOpeKs0y3r8S",
+    project_name="general",
+    workspace="razvanavesalon",)
 
-    torch.cuda.empty_cache()
 
-    from GPUtil import showUtilization as gpu_usage
-    gpu_usage()
     exp_name = f"Experiment_Dice_index{datetime.now().strftime('%m%d%Y_%H%M')}"
 
     exp_path = pt.Path.cwd()/exp_name  # get current working directory
@@ -209,10 +214,13 @@ def main():
     config = None
     with open('config.yaml') as f:  # reads .yml/.yaml files
         config = yaml.safe_load(f)
+        
+    experiment.log_parameters(config)  
+        
     yml_data=yaml.dump(config)
     f= open(f"{path}\\yaml_config.yml","w+")
     f.write(yml_data)    
-
+    f.close()
 
 
     pixels = T.Compose([
@@ -235,17 +243,17 @@ def main():
     ])
 
    
-    path_construct = glob.glob(config["data"]['data_path'])
-    path_list = create_dataset_csv(path_construct)
-    dataset_df = pd.DataFrame(path_list)
+    #path_construct = glob.glob(config["data"]['data_path'])
+    #path_list = create_dataset_csv(path_construct)
+    #dataset_df = pd.DataFrame(path_list)
 
     
 
-    dataset_df = split_dataset(dataset_df, split_per=config['data']['split_per'], seed=1)
-    print(dataset_df.head(3))
-    dataset_df.to_csv(config['data']['dataset_csv'])
+    #dataset_df = split_dataset(dataset_df, split_per=config['data']['split_per'], seed=1)
+    #print(dataset_df.head(3))
+    #dataset_df.to_csv(config['data']['dataset_csv'])
 
-    #dataset_df=pd.read_csv(config['data']['dataset_csv'])
+    dataset_df=pd.read_csv(config['data']['dataset_csv'])
 
      
     train_df = dataset_df.loc[dataset_df["subset"] == "train"]
@@ -254,7 +262,7 @@ def main():
     print(train_loader)
 
     valid_df = dataset_df.loc[dataset_df["subset"] == "valid", :]
-    valid_ds = AngioClass(valid_df, img_size=config['data']['img_size'], geometrics_transforms=geometric_t)
+    valid_ds = AngioClass(valid_df, img_size=config['data']['img_size'], pixel_transforms=pixels)
     valid_loader = torch.utils.data.DataLoader(valid_ds, batch_size=config['train']['bs'], shuffle=False)
 
     print(f"# Train: {len(train_ds)} # Valid: {len(valid_ds)}")
