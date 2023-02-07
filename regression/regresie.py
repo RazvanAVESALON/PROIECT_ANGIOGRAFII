@@ -19,12 +19,10 @@ import torchvision.transforms as T
 import torchmetrics
 import monai.transforms as TR
 import torchvision.transforms.functional as TF 
-from skimage.color import gray2rgb 
-config = None
-with open('config.yaml') as f:  # reads .yml/.yaml files
-    config = yaml.safe_load(f)
+from skimage.color import gray2rgb
 
-class AngioClass(torch.utils.data.Dataset):
+
+class RegersionClass(torch.utils.data.Dataset):
     def __init__(self, dataset_df, img_size,geometrics_transforms=None,pixel_transforms=None):
         self.dataset_df = dataset_df.reset_index(drop=True)
         self.img_size = tuple(img_size)
@@ -47,7 +45,7 @@ class AngioClass(torch.utils.data.Dataset):
         return patient, acquisition, frame , header ,annotations
     
  
-    def crop_colimator(self, frame,gt, info):
+    def crop_colimator(self, frame, info):
         img = frame.astype(np.float32)
         in_min = 0
         in_max = 2 ** info['BitsStored'] - 1
@@ -61,89 +59,73 @@ class AngioClass(torch.utils.data.Dataset):
             
         # crop collimator
         img_edge = info['ImageEdges']
+        print('img_c',img.shape)
+        print(img[..., img_edge[2]:img_edge[3]+1, img_edge[0]:img_edge[1]+1])
         img_c = img[..., img_edge[2]:img_edge[3]+1, img_edge[0]:img_edge[1]+1]
-        new_gt=gt[..., img_edge[2]:img_edge[3]+1, img_edge[0]:img_edge[1]+1]
         
-        return img_c,new_gt         
+        return img_c 
 
     
     def __getitem__(self, idx):
         img = np.load(self.dataset_df['images_path'][idx])['arr_0']
         frame_param = self.dataset_df['frames'][idx]
+        original_height=img[frame_param].shape[0]
+        original_width=img[frame_param].shape[1]
         new_img = img[frame_param]
+        
         with open(self.dataset_df['angio_loader_header'][idx]) as f:
             angio_loader = json.load(f)
             
         with open(self.dataset_df['annotations_path'][idx]) as f:
             clipping_points = json.load(f)
+        
+        bifurcation_point = clipping_points[str(frame_param)]
+      
+        croped_colimator_img=self.crop_colimator(new_img,angio_loader)
+        
+      
+        bifurcation_point[1]=bifurcation_point[1]-angio_loader['ImageEdges'][0]
+        bifurcation_point[0]=bifurcation_point[0]-angio_loader['ImageEdges'][2]
+        # print('Bifurcation point : ',bifurcation_point)
+        # print(bifurcation_point[1], bifurcation_point[0])
+        # print(croped_colimator_img.shape)
+        # black=np.zeros(croped_colimator_img.shape)
+        # masked_gt=cv2.circle(black, (int(bifurcation_point[1]),int(bifurcation_point[0])), 5, [255,0,0], -1) 
+        # plt.subplot(1,2,1)
+        # plt.imshow(croped_colimator_img, cmap="gray")
+        # plt.subplot(1,2,2)
+        # plt.imshow(masked_gt , cmap="gray")
+        # plt.show()
 
-        target = np.zeros(img.shape, dtype=np.uint8)
-        target[frame_param] = cv2.circle(target[frame_param], [clipping_points[str(frame_param)][1], clipping_points[str(frame_param)][0]], 8, [255, 255, 255], -1)
-        
-        croped_colimator_img,croped_colimator_gt=self.crop_colimator(new_img,target[frame_param],angio_loader)
-        
         new_img = cv2.resize(croped_colimator_img, self.img_size, interpolation=cv2.INTER_AREA)
-        new_target = cv2.resize(croped_colimator_gt, self.img_size, interpolation=cv2.INTER_AREA)
         
-        new_target = new_target/255
-        new_img = new_img*1/255
-        
-        x=np.expand_dims(new_img, axis=0)
-        y=np.expand_dims(new_target, axis=0)
-        
-        tensor_y = torch.from_numpy(y)
-        tensor_x = torch.from_numpy(x)
-       
-        
-        if self.pixel_transforms != None:
-            
-            data_pixel = {"img": tensor_x}
-            tensor_x=self.pixel_transforms(data_pixel)["img"]
-                
-        
-        if self.geometrics_transforms != None:
-            data_geo = {"img": tensor_x, "seg": tensor_y}
-            result = self.geometrics_transforms(data_geo)
-        
-            tensor_x=result["img"]
-            tensor_y=result["seg"]
+        bifurcation_point[0]=bifurcation_point[0]*self.img_size[0]/croped_colimator_img.shape[0]
+        bifurcation_point[1]=bifurcation_point[1]*self.img_size[1]/croped_colimator_img.shape[1]
+        bifurcation_point=np.array(bifurcation_point)
+        print(new_img.shape, type(new_img))
+        black=np.zeros((256,256))
+        masked_gt=cv2.circle(black, (int(bifurcation_point[1]),int(bifurcation_point[0])), 5, [255,0,0], -1) 
+      
+        # plt.subplot(1,2,1)
+        # plt.imshow(new_img, cmap="gray")
+        # plt.subplot(1,2,2)
+        # plt.imshow(masked_gt , cmap="gray")
+        # plt.show()
 
- 
+        new_img=new_img*1/255 
+        bifurcation_point = bifurcation_point*1/255  
+        img_3d=np.zeros((3,new_img.shape[0],new_img.shape[1]))
+        img_3d[0,:,:]=new_img
+        img_3d[1,:,:]=new_img
+        img_3d[2,:,:]=new_img
+        tensor_y = torch.from_numpy(bifurcation_point)
+        tensor_x = torch.from_numpy(img_3d)
         #print (tensor_x.min(),tensor_y.min(),tensor_x.max(),tensor_y.max())
        
-        #plt.imshow(tensor_x[0], cmap="gray")
+        #plt.imshow(tensor_x, cmap="gray")
         #plt.show()
         #plt.imshow(tensor_y[0] , cmap="gray")
         #plt.show()
 
-        return tensor_x.float(), tensor_y.int() , idx
+        return tensor_x.float(), tensor_y.float(), idx
     
-    
-
-
-def plot_acc_loss(result,path):
-    acc = result['dice']['train']
-    loss = result['loss']['train']
-    val_acc = result['dice']['valid']
-    val_loss = result['loss']['valid']
-    
-    plt.figure(figsize=(15, 5))
-    plt.subplot(121)
-    plt.plot(acc, label='Train')
-    plt.plot(val_acc, label='Validation')
-    plt.title('DICE', size=15)
-    plt.legend()
-    plt.grid(True)
-    plt.ylabel('DICE')
-    plt.xlabel('Epoch')
-    
-    plt.subplot(122)
-    plt.plot(loss, label='Train')
-    plt.plot(val_loss, label='Validation')
-    plt.title('Loss', size=15)
-    plt.legend()
-    plt.grid(True)
-    plt.ylabel('Loss')
-    plt.xlabel('Epoch')
-    
-    plt.savefig(f"{path}\\Curbe de învățare")

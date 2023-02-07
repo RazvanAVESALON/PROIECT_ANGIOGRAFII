@@ -10,6 +10,7 @@ from PyQt5.QtWidgets import *
 from PyQt5.QtCore import *
 from PyQt5.QtGui import *
 
+
 def apply_transfer_function(frames, w, c):
     y_min = 0.0
     y_max = 255.0
@@ -22,9 +23,11 @@ def apply_transfer_function(frames, w, c):
 
     result[below] = y_min
     result[above] = y_max
-    result[between] = ((frames[between] - (c - 0.5)) / (w-1) + 0.5) * (y_max - y_min) + y_min
+    result[between] = ((frames[between] - (c - 0.5)) /
+                       (w-1) + 0.5) * (y_max - y_min) + y_min
 
     return result
+
 
 class SeedpointAnnotationWidow(QMainWindow):
     def __init__(self):
@@ -40,10 +43,10 @@ class SeedpointAnnotationWidow(QMainWindow):
         self.current_frame = 0
         self.last_opened_path = r""
 
-
     @pyqtSlot()
     def on_open_btn_clicked(self):
-        path = QFileDialog.getExistingDirectory(self, "Open study", self.last_opened_path)
+        path = QFileDialog.getExistingDirectory(
+            self, "Open study", self.last_opened_path)
         if path:
             self.last_opened_path = path
             self.cases = []
@@ -73,7 +76,6 @@ class SeedpointAnnotationWidow(QMainWindow):
         self.current_frame %= self.angio.shape[0]
         self.update_image_view()
 
-
     @pyqtSlot()
     def on_next_frame_btn_clicked(self):
         if self.angio is None:
@@ -82,7 +84,6 @@ class SeedpointAnnotationWidow(QMainWindow):
         self.current_frame += 1
         self.current_frame %= self.angio.shape[0]
         self.update_image_view()
-
 
     @pyqtSlot()
     def on_previous_case_btn_clicked(self):
@@ -93,7 +94,6 @@ class SeedpointAnnotationWidow(QMainWindow):
         self.current_case_idx %= len(self.cases)
         self.load_case(self.cases[self.current_case_idx])
 
-
     @pyqtSlot()
     def on_next_case_btn_clicked(self):
         with open(self.annotation_path, "w") as f:
@@ -103,13 +103,11 @@ class SeedpointAnnotationWidow(QMainWindow):
         self.current_case_idx %= len(self.cases)
         self.load_case(self.cases[self.current_case_idx])
 
-
     def on_image_view_mousePressEvent(self, event):
         if self.distal_pts_btn.isChecked():
             pos = (event.pos().y(), event.pos().x())
             self.clipping_points[str(self.current_frame)] = pos
             self.update_image_view()
-
 
     def on_image_view_wheelEvent(self, event):
         if event.angleDelta().y() > 0:
@@ -123,7 +121,6 @@ class SeedpointAnnotationWidow(QMainWindow):
     def on_image_view_mouseReleaseEvent(self, event):
         pass
 
-
     def load_case(self, case_path):
         with open(os.path.join(case_path, "angio_loader_header.json"), "r") as f:
             self.metadata = json.load(f)
@@ -135,14 +132,15 @@ class SeedpointAnnotationWidow(QMainWindow):
         with open(self.annotation_path, "r") as f:
             self.clipping_points = json.load(f)
 
-        self.angio = np.load(os.path.join(case_path, "frame_extractor_frames.npz"))["arr_0"]
-        self.angio = apply_transfer_function(self.angio, self.metadata['WindowWidth'], self.metadata['WindowCenter'])
+        self.angio = np.load(os.path.join(
+            case_path, "frame_extractor_frames.npz"))["arr_0"]
+        self.angio = apply_transfer_function(
+            self.angio, self.metadata['WindowWidth'], self.metadata['WindowCenter'])
         self.angio = self.angio.astype(np.uint8)
-        
+
         self.current_frame = 0
 
         self.update_image_view()
-
 
     def update_image_view(self):
         if self.angio is None:
@@ -151,7 +149,8 @@ class SeedpointAnnotationWidow(QMainWindow):
         self.slider.setMaximum(self.angio.shape[0] - 1)
         self.slider.setValue(self.current_frame)
 
-        qimage = QImage(self.angio[self.current_frame].data, self.metadata["ImageSize"][0], self.metadata["ImageSize"][1], self.metadata["ImageSize"][0], QImage.Format_Grayscale8)
+        qimage = QImage(self.angio[self.current_frame].data, self.metadata["ImageSize"][0],
+                        self.metadata["ImageSize"][1], self.metadata["ImageSize"][0], QImage.Format_Grayscale8)
         self.angio_view.setFixedWidth(self.metadata["ImageSize"][1])
         self.angio_view.setFixedHeight(self.metadata["ImageSize"][0])
         self.angio_view.setPixmap(QPixmap(qimage))
@@ -161,7 +160,8 @@ class SeedpointAnnotationWidow(QMainWindow):
             painter.setPen(QColor("yellow"))
             painter.setBrush(QColor("yellow"))
 
-            painter.drawEllipse(QPoint(self.clipping_points[str(self.current_frame)][1], self.clipping_points[str(self.current_frame)][0]), 5, 5)
+            painter.drawEllipse(QPoint(self.clipping_points[str(
+                self.current_frame)][1], self.clipping_points[str(self.current_frame)][0]), 5, 5)
 
             painter.end()
 

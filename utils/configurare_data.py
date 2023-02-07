@@ -1,57 +1,40 @@
-import matplotlib.pyplot as plt
-import numpy as np
-import pandas as pd
-import pathlib as pt
 import random
-import yaml
-import cv2
 
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-import torchvision
-import torchvision.transforms as T
-import torchmetrics 
 import glob
-import os 
+import os
 import json
 
-from tqdm import tqdm
-from UNet import UNet
-
-
-    
 
 def create_dataset_csv(path_construct):
-    path_list={"images_path":[],"annotations_path":[],"frames":[],"patient":[],"acquisition":[],"angio_loader_header":[]}
-    #frame_list={"frames"}
+    path_list = {"images_path": [], "annotations_path": [], "frames": [
+    ], "patient": [], "acquisition": [], "angio_loader_header": []}
+    # frame_list={"frames"}
 
     for patient in path_construct:
         #print (image)
-        #x=os.path.join(image,r"*")
-        
-        x=glob.glob(os.path.join(patient,r"*"))
+        # x=os.path.join(image,r"*")
+
+        x = glob.glob(os.path.join(patient, r"*"))
         # print (x)
         for acquisiton in x:
-            img=os.path.join(acquisiton,"frame_extractor_frames.npz")
-            annotations=os.path.join(acquisiton,"clipping_points.json")
-            angio_leader=os.path.join(acquisiton,"angio_loader_header.json")
-            with open (annotations) as f :
-                clipping_points=json.load(f)
+            img = os.path.join(acquisiton, "frame_extractor_frames.npz")
+            annotations = os.path.join(acquisiton, "clipping_points.json")
+            angio_leader = os.path.join(acquisiton, "angio_loader_header.json")
+            with open(annotations) as f:
+                clipping_points = json.load(f)
 
             for frame in clipping_points:
-                frame_int= int(frame)
-                
+                frame_int = int(frame)
+
                 path_list['images_path'].append(img)
                 path_list['annotations_path'].append(annotations)
                 path_list['frames'].append(frame_int)
                 path_list['patient'].append(os.path.basename(patient))
                 path_list['acquisition'].append(os.path.basename(acquisiton))
                 path_list['angio_loader_header'].append(angio_leader)
-        
-            
 
     return path_list
+
 
 def split_dataset(dataset_df, split_per, seed=1):
     """Impartirea setului de date in antrenare, validare si testare in mod aleatoriu
@@ -64,12 +47,11 @@ def split_dataset(dataset_df, split_per, seed=1):
     """
     # se amesteca aleatoriu indecsii DataFrame-ului
     # indexul este un numar (de cele mai multe ori) asociat fiecarui rand
-    
-    
+
     patients = dataset_df['patient'].unique()
-    
+
     total = len(patients)
-    
+
     random.seed(seed)
     random.shuffle(patients)
 
@@ -81,11 +63,14 @@ def split_dataset(dataset_df, split_per, seed=1):
     train_patients = patients[:train_idx]
     valid_patients = patients[train_idx:valid_idx]
     test_patients = patients[valid_idx:test_idx]
- 
+
     dataset_df['subset'] = ""
-    
-    dataset_df.loc[dataset_df['patient'].isin(train_patients), 'subset'] = 'train'
-    dataset_df.loc[dataset_df['patient'].isin(valid_patients), 'subset'] = 'valid'
-    dataset_df.loc[dataset_df['patient'].isin(test_patients), 'subset'] = 'test'
-    
+
+    dataset_df.loc[dataset_df['patient'].isin(
+        train_patients), 'subset'] = 'train'
+    dataset_df.loc[dataset_df['patient'].isin(
+        valid_patients), 'subset'] = 'valid'
+    dataset_df.loc[dataset_df['patient'].isin(
+        test_patients), 'subset'] = 'test'
+
     return dataset_df

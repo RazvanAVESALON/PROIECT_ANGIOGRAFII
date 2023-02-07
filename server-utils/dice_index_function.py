@@ -10,13 +10,15 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torchvision
 import torchvision.transforms as T
-import torchmetrics 
+import torchmetrics
 from tqdm import tqdm
 from UNetModel import UNet
-from configurare_data import create_dataset_csv , split_dataset
-from lungs_class import LungSegDataset , plot_acc_loss
+from configurare_data import create_dataset_csv, split_dataset
+from lungs_class import LungSegDataset, plot_acc_loss
 import os
 from datetime import datetime
+
+
 def train(network, train_loader, valid_loader, criterion, opt, epochs=100, thresh=0.5, weights_dir='weights'):
     total_loss = {'train': [], 'valid': []}
     total_acc = {'train': [], 'valid': []}
@@ -34,11 +36,10 @@ def train(network, train_loader, valid_loader, criterion, opt, epochs=100, thres
     criterion.to(device)
 
     for ep in range(epochs):
-        
 
         print(f"[INFO] Epoch {ep}/{epochs - 1}")
-        
-        print("-" * 20)        
+
+        print("-" * 20)
         for phase in ['train', 'valid']:
             running_loss = 0.0
 
@@ -59,15 +60,16 @@ def train(network, train_loader, valid_loader, criterion, opt, epochs=100, thres
                     with torch.set_grad_enabled(phase == 'train'):
                         # se face forward propagation -> se calculeaza predictia
                         output = network(ins)
-                        #print(output.size())
-                     
+                        # print(output.size())
+
                         #second_output = Variable(torch.argmax(output,1).float(),requires_grad=True).cuda()
-                        
+
                         # se calculeaza eroarea/loss-ul
                         loss = criterion(output, tgs.squeeze())
-                        
+
                         # deoarece reteaua nu include un strat de softmax, predictia finala trebuie calculata manual
-                        current_predict = (F.softmax(output, dim=1)[:, 1] > thresh).float()
+                        current_predict = (F.softmax(output, dim=1)[
+                                           :, 1] > thresh).float()
 
                         if 'cuda' in device.type:
                             current_predict = current_predict.cpu()
@@ -86,7 +88,7 @@ def train(network, train_loader, valid_loader, criterion, opt, epochs=100, thres
                             loss.backward()
                             # se actualizează weights-urile
                             opt.step()
-                    
+
                     running_loss += loss.item() * ins.size(0)
                     # print(running_loss, loss.item())
 
@@ -95,39 +97,36 @@ def train(network, train_loader, valid_loader, criterion, opt, epochs=100, thres
                         # torch.save(network, 'my_model.pth')
                         model_path = f"{weights_dir}\\model_epoch{ep}.pth"
                         torch.save({'epoch': ep,
-                                 
+
                                     'loss': total_loss,
-                                    }, model_path) 
-                        
-                     
+                                    }, model_path)
+
                     pbar.update(ins.shape[0])
 
- 
                 # Calculam loss-ul pt toate batch-urile dintr-o epoca
-                total_loss[phase].append(running_loss/len(loaders[phase].dataset))
-                
+                total_loss[phase].append(
+                    running_loss/len(loaders[phase].dataset))
+
                 # Calculam acuratetea pt toate batch-urile dintr-o epoca
                 acc = metric.compute()
                 total_acc[phase].append(acc)
-            
+
                 postfix = f'error {total_loss[phase][-1]:.4f} accuracy {acc*100:.2f}%'
                 pbar.set_postfix_str(postfix)
-                        
+
                 # Resetam pt a acumula valorile dintr-o noua epoca
                 metric.reset()
-                         
+
         return {'loss': total_loss, 'acc': total_acc}
 
 
+directory = f"Experiment{datetime.now().strftime('%m%d%Y_%H%M')}"
 
-
-directory =f"Experiment{datetime.now().strftime('%m%d%Y_%H%M')}"
-
-parent_dir =os.getcwd() # get current working directory
+parent_dir = os.getcwd()  # get current working directory
 path = os.path.join(parent_dir, directory)
 os.mkdir(path)
-dir="Weights"
-path=os.path.join(path, dir)
+dir = "Weights"
+path = os.path.join(path, dir)
 os.mkdir(path)
 
 print(f"pyTorch version {torch.__version__}")
@@ -136,16 +135,17 @@ print(f"torchmetrics version {torchmetrics.__version__}")
 print(f"CUDA available {torch.cuda.is_available()}")
 
 config = None
-with open('config.yaml') as f: # reads .yml/.yaml files
+with open('config.yaml') as f:  # reads .yml/.yaml files
     config = yaml.safe_load(f)
-    
 
-dataset_df = create_dataset_csv(config["data"]["images_dir"], 
+
+dataset_df = create_dataset_csv(config["data"]["images_dir"],
                                 config["data"]["right_masks_dir"],
                                 config["data"]["left_masks_dir"],
                                 config["data"]["data_csv"])
 
-dataset_df = split_dataset(dataset_df, split_per=config['data']['split_per'], seed=1)
+dataset_df = split_dataset(
+    dataset_df, split_per=config['data']['split_per'], seed=1)
 dataset_df.head(3)
 
 data_ds = LungSegDataset(dataset_df, img_size=config["data"]["img_size"])
@@ -166,11 +166,13 @@ print(network)
 
 train_df = dataset_df.loc[dataset_df["subset"] == "train", :]
 train_ds = LungSegDataset(train_df, img_size=config["data"]["img_size"])
-train_loader = torch.utils.data.DataLoader(train_ds, batch_size=config['train']['bs'], shuffle=True)
+train_loader = torch.utils.data.DataLoader(
+    train_ds, batch_size=config['train']['bs'], shuffle=True)
 
 valid_df = dataset_df.loc[dataset_df["subset"] == "valid", :]
 valid_ds = LungSegDataset(valid_df, img_size=config["data"]["img_size"])
-valid_loader = torch.utils.data.DataLoader(valid_ds, batch_size=config['train']['bs'], shuffle=False)
+valid_loader = torch.utils.data.DataLoader(
+    valid_ds, batch_size=config['train']['bs'], shuffle=False)
 
 print(f"# Train: {len(train_ds)} # Valid: {len(valid_ds)}")
 
@@ -181,6 +183,7 @@ if config['train']['opt'] == 'Adam':
 elif config['train']['opt'] == 'SGD':
     opt = torch.optim.SGD(network.parameters(), lr=config['train']['lr'])
 
-history = train(network, train_loader, valid_loader, criterion, opt, epochs=config['train']['epochs'], thresh=config['test']['threshold'],weights_dir=path)
+history = train(network, train_loader, valid_loader, criterion, opt,
+                epochs=config['train']['epochs'], thresh=config['test']['threshold'], weights_dir=path)
 
 plot_acc_loss(history)
