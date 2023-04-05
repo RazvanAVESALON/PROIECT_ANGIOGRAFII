@@ -12,3 +12,4 @@ regression_server_cods/data/00e91486f2fd40f198e7e09216937155/48809182/angio_load
 *.json
 csv_metadata.py
 *.npz
+s11201/*
