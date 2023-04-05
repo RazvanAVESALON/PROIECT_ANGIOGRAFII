@@ -208,7 +208,7 @@ def main():
 
     yml_data = yaml.dump(config)
     directory = f"Test{datetime.now().strftime('%m%d%Y_%H%M')}"
-    parent_dir = r"/media/cuda/HDD 1TB  - DATE/AvesalonRazvanDate , Experimente/Experimente/Experiment_Dice_index01252023_2243"
+    parent_dir = r"/media/cuda/HDD 1TB  - DATE/AvesalonRazvanDate , Experimente/Experimente/Experiment_Dice_index02082023_1813"
     path = pt.Path(parent_dir)/directory
     path.mkdir(exist_ok=True)
     dir = r'Predictii_Overlap'
@@ -240,7 +240,7 @@ def main():
         test_ds, batch_size=config["train"]["bs"], shuffle=False)
 
     network = torch.load(
-        r"/media/cuda/HDD 1TB  - DATE/AvesalonRazvanDate , Experimente/Experimente/Experiment_Dice_index01252023_2243/Weights/my_model01272023_2135_e350.pt")
+        r"/media/cuda/HDD 1TB  - DATE/AvesalonRazvanDate , Experimente/Experimente/Experiment_Dice_index02082023_1813/Weights/my_model02102023_1709_e350.pt")
 
     # print(f"# Test: {len(test_ds)}")
 
@@ -263,7 +263,7 @@ def main():
         for index in dataf_patient.index:
             sum_dice += dataf_patient['Dice_forground'][index]
             print(len(dataf_patient['Distance'][index]))
-            if dataf_patient['Distance'][index] == "Can't calculate Distance For this frame ( No prediction )":
+            if dataf_patient['Distance'][index] == "Can't calculate Distance For this frame ( No prediction )" and type(dataf_patient['Distance'][index][0] == 'str'):
                 sum_distance += -1
 
             else:
@@ -272,7 +272,10 @@ def main():
                         print(sum_distance)
                         sum_distance = sum_distance + distance
                 else:
-                    sum_distance += dataf_patient['Distance'][index][0]
+                    if type(dataf_patient['Distance'][index][0]) != float:
+                        sum_distance += -1
+                    else:
+                        sum_distance += dataf_patient['Distance'][index][0]
 
         print(type(dataf_patient), len(dataf_patient))
         print(sum_dice, sum_distance)
@@ -364,7 +367,10 @@ def main():
                 foo_Overlap = cv2.putText(
                     foo_Overlap, f'{distance}', (5, 65), cv2.FONT_HERSHEY_SIMPLEX, .4, (255, 255, 255))
             else:
-                distance = float(distance)
+                if len(distance) != 1 :
+                    distance=-1  
+                else:distance = float(distance[0])
+
                 foo_Overlap = cv2.putText(
                     foo_Overlap, f'{distance:.2f}', (5, 65), cv2.FONT_HERSHEY_SIMPLEX, .4, (255, 255, 255))
 

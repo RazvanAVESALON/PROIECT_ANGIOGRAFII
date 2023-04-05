@@ -85,7 +85,7 @@ class OutConv(nn.Module):
 
 
 class UNet(nn.Module):
-    def __init__(self, n_channels, n_classes, bilinear=True, final_activation=nn.Sigmoid()):
+    def __init__(self, n_channels, n_classes, bilinear=True, final_activation=nn.Softmax()):
         super(UNet, self).__init__()
         self.n_channels = n_channels
         self.n_classes = n_classes

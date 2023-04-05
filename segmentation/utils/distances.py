@@ -34,7 +34,7 @@ def mm2pixels(coordonate_mm_list, magnification_factor, image_spacing):
     return coords_pixel
 
 
-def calculate_distance(gt_coordonates, pred_coordonates):
+def calcuate_distance(gt_coordonates, pred_coordonates):
     distance = []
     if len(gt_coordonates['x']) <= 1:
         # print(gt_coordonates,pred_coordonates)

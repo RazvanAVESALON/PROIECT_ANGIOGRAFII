@@ -18,29 +18,26 @@ import torchmetrics
 from tqdm import tqdm
 from datetime import datetime
 import sys
-sys.path.append(r'D:\ai intro\Angiografii\PROIECT_ANGIOGRAFII\segmentation')
-
-from angio_class import plot_acc_loss
 from torchmetrics import MeanSquaredError
 import matplotlib.pyplot as plt
 from comet_ml import Experiment
 from regresie import RegersionClass
-
+import albumentations as A 
 
 def plot_acc_loss(result, path):
-    acc = result['acc']['train']
+    acc = result['MSE']['train']
     loss = result['loss']['train']
-    val_acc = result['acc']['valid']
+    val_acc = result['MSE']['valid']
     val_loss = result['loss']['valid']
 
     plt.figure(figsize=(15, 5))
     plt.subplot(121)
     plt.plot(acc, label='Train')
     plt.plot(val_acc, label='Validation')
-    plt.title('Accuracy', size=15)
+    plt.title('MSE', size=15)
     plt.legend()
     plt.grid(True)
-    plt.ylabel('Accuracy')
+    plt.ylabel('MSE')
     plt.xlabel('Epoch')
 
     plt.subplot(122)
@@ -52,7 +49,7 @@ def plot_acc_loss(result, path):
     plt.ylabel('Loss')
     plt.xlabel('Epoch')
 
-    plt.savefig(f"{path}\\Curbe de învățare")
+    plt.savefig(f"{path}/Curbe de învățare")
 
 
 def set_parameter_requires_grad(model, freeze):
@@ -61,7 +58,7 @@ def set_parameter_requires_grad(model, freeze):
             param.requires_grad = False
 
 
-def train(network, train_loader, valid_loader, exp, criterion, opt, epochs, thresh=0.5, weights_dir='weights', save_every_ep=10):
+def train(network, train_loader, valid_loader, exp, criterion, opt, epochs, thresh=0.5, weights_dir='weights', save_every_ep=50):
 
     total_loss = {'train': [], 'valid': []}
     total_dice = {'train': [], 'valid': []}
@@ -108,6 +105,7 @@ def train(network, train_loader, valid_loader, exp, criterion, opt, epochs, thre
                         # se face forward propagation -> se calculeaza predictia
                         # plt.imshow(ins[0][0].cpu(),cmap='gray')
                         # plt.show()
+                        
                         output = network(ins)
 
                         # plt.imshow(output[0][0].cpu().detach().numpy(),cmap='gray')
@@ -121,6 +119,7 @@ def train(network, train_loader, valid_loader, exp, criterion, opt, epochs, thre
                         #print('Output ', output.shape , output.dtype , output.min(), output.max())
                         #print('target',tgs.shape , tgs.dtype , tgs.min(), tgs.max())
                         # se calculeaza eroarea/loss-ul
+                        print (output.shape , tgs.squeeze())
                         loss = criterion(output, tgs.squeeze())
 
                         #plt.imshow(current_predict[0].cpu().detach().numpy(), cmap='gray')
@@ -136,8 +135,7 @@ def train(network, train_loader, valid_loader, exp, criterion, opt, epochs, thre
                         # plt.show()
 
                         #print(current_predict.shape, current_target.shape)
-                        #print(current_predict.dtype, current_target.dtype)
-
+                        #print(current_predict.dtype, current_target.dtype
                         mse = metric(output, tgs)
                         # print(dice_idx.item)
 
@@ -162,7 +160,7 @@ def train(network, train_loader, valid_loader, exp, criterion, opt, epochs, thre
                         # salvam ponderile modelului dupa fiecare epoca
                         if ep % save_every_ep == 0:
                             torch.save(
-                                network, f"{weights_dir}\\my_model{datetime.now().strftime('%m%d%Y_%H%M')}_e{ep}.pt")
+                                network, f"{weights_dir}/my_model{datetime.now().strftime('%m%d%Y_%H%M')}_e{ep}.pt")
 
                     #     model_path = f"{weights_dir}\\model_epoch{ep}.pth"
                     #     torch.save({'epoch': ep,
@@ -201,6 +199,10 @@ def main():
     print(f"torchmetrics version {torchmetrics.__version__}")
     print(f"CUDA available {torch.cuda.is_available()}")
 
+    config = None
+    with open('config.yaml') as f:  # reads .yml/.yaml files
+        config = yaml.safe_load(f)
+
     experiment = Experiment(
         api_key="wwQKu3dl9l1bRZOpeKs0y3r8S",
         project_name="general",
@@ -208,22 +210,19 @@ def main():
 
     exp_name = f"Experiment_MSE{datetime.now().strftime('%m%d%Y_%H%M')}"
 
-    exp_path = r'D:\ai intro\Angiografii\PROIECT_ANGIOGRAFII\segmentation'/exp_name  # get current working directory
+    path_1=pt.Path.cwd()
+    exp_path = path_1/exp_name  # get current working directory
     exp_path.mkdir(exist_ok=True)
     dir = "Weights"
     path = pt.Path(exp_path)/dir
     path.mkdir(exist_ok=True)
-
     #network = UNet(n_channels=1, n_classes=2,final_activation=nn.Sigmoid())
 
-    config = None
-    with open('config.yaml') as f:  # reads .yml/.yaml files
-        config = yaml.safe_load(f)
-
+  
     experiment.log_parameters(config)
 
     yml_data = yaml.dump(config)
-    f = open(f"{path}\\yaml_config.yml", "w+")
+    f = open(f"{path}/yaml_config.yml", "w+")
     f.write(yml_data)
     f.close()
 
@@ -232,24 +231,37 @@ def main():
         TR.ToTensord(keys="img"),
     ])
 
-    pixel_t = TR.Compose([
-        TR.GaussianSmoothd(keys="img", sigma=config['train']['sigma']),
-        TR.RandGibbsNoised(
-            keys="img", prob=config['train']['gibbs_noise_prob'], alpha=config['train']['alpha']),
-        TR.RandAdjustContrastd(
-            keys="img", prob=config['train']['contrast_prob'], gamma=config['train']['contrast_gamma']),
-    ])
+    # pixel_t = TR.Compose([
+    #     TR.GaussianSmoothd(keys="img", sigma=config['train']['sigma']),
+    #     TR.RandGibbsNoised(
+    #         keys="img", prob=config['train']['gibbs_noise_prob'], alpha=config['train']['alpha']),
+    #     TR.RandAdjustContrastd(
+    #         keys="img", prob=config['train']['contrast_prob'], gamma=config['train']['contrast_gamma']),
+    # ])
+    
+    pixel_t=A.Compose([
+        A.CLAHE(clip_limit=config['train']['clip_limit'], tile_grid_size=config['train']['tile_grid_size'], always_apply=False, p=config['train']['p_clahe']),
+        A.GaussianBlur(blur_limit=config['train']['blur_limit'], sigma_limit=config['train']['sigma_limit'], always_apply=False, p=config['train']['p_gauss_blur']),
+        A.RandomGamma(gamma_limit=config['train']['gamma_limit'], eps=None, always_apply=False, p=config['train']['p']),
+        
+        ],keypoint_params=A.KeypointParams(format='yx', remove_invisible=False))
 
-    geometric_t = TR.Compose([
 
-        TR.RandRotated(keys=["img", "seg"], prob=config['train']['rotate_prob'],
-                       range_x=config['train']['rotate_range'], mode=['bilinear', 'nearest']),
-        TR.RandFlipd(keys=["img", "seg"], prob=config['train']['flip_prob'],
-                     spatial_axis=config['train']['flip_spatial_axis']),
-        TR.RandZoomd(keys=["img", "seg"], prob=config['train']['zoom_prob'],
-                     min_zoom=config['train']['min_zoom'], max_zoom=config['train']['max_zoom'])
-        #TR.RandSpatialCropSamplesd(keys=["img", "seg"],num_samples=config['train']['rand_crop_samples'], roi_size=config['train']['rand_crop_size'],random_size=False),
-    ])
+    geometric_t= A.Compose([
+        A.Rotate(limit=config['train']['rotate_range']),
+        A.Resize(height=config['data']['img_size'][0] , width=config['data']['img_size'][1])
+    ],keypoint_params=A.KeypointParams(format='yx', remove_invisible=False))
+    
+    # geometric_t = TR.Compose([
+
+    #     TR.RandRotated(keys=["img", "seg"], prob=config['train']['rotate_prob'],
+    #                    range_x=config['train']['rotate_range'], mode=['bilinear', 'nearest']),
+    #     TR.RandFlipd(keys=["img", "seg"], prob=config['train']['flip_prob'],
+    #                  spatial_axis=config['train']['flip_spatial_axis']),
+    #     TR.RandZoomd(keys=["img", "seg"], prob=config['train']['zoom_prob'],
+    #                  min_zoom=config['train']['min_zoom'], max_zoom=config['train']['max_zoom'])
+    #     #TR.RandSpatialCropSamplesd(keys=["img", "seg"],num_samples=config['train']['rand_crop_samples'], roi_size=config['train']['rand_crop_size'],random_size=False),
+    # ])
 
     #path_construct = glob.glob(config["data"]['data_path'])
     #path_list = create_dataset_csv(path_construct)
@@ -261,27 +273,34 @@ def main():
 
     dataset_df = pd.read_csv(config['data']['dataset_csv'])
 
-    train_df = dataset_df.loc[dataset_df["subset"] == "train"]
-    train_ds = RegersionClass(train_df, img_size=config['data']['img_size'])
+    train_df = dataset_df.loc[dataset_df["subset"] == "train",:]
+    print(train_df)
+    train_ds = RegersionClass(train_df, img_size=config['data']['img_size'],pixel_transforms=pixel_t,geometrics_transforms=geometric_t)
 
     train_loader = torch.utils.data.DataLoader(
-        train_ds, batch_size=config['train']['bs'], shuffle=True,)
+        train_ds, batch_size=config['train']['bs'], shuffle=True,drop_last=True)
 
     valid_df = dataset_df.loc[dataset_df["subset"] == "valid", :]
-    valid_ds = RegersionClass(valid_df, img_size=config['data']['img_size'])
+    print(valid_df)
+    valid_ds = RegersionClass(valid_df, img_size=config['data']['img_size'],pixel_transforms=pixels)
     valid_loader = torch.utils.data.DataLoader(
-        valid_ds, batch_size=config['train']['bs'], shuffle=False)
+        valid_ds, batch_size=config['train']['bs'], shuffle=False,drop_last=True)
 
     print(f"# Train: {len(train_ds)} # Valid: {len(valid_ds)}")
 
   # Specificarea functiei loss
     criterion = nn.MSELoss()
     n_classes = 2
-    network = torchvision.models.resnet18(pretrained=True)
-    set_parameter_requires_grad(network, freeze=False)
-    num_ftrs = network.fc.in_features
-    network.fc = nn.Linear(num_ftrs, n_classes)
-    print(network)
+    # network = torchvision.models.resnet34(pretrained=True)
+    # set_parameter_requires_grad(network, freeze=False)
+    # num_ftrs = network.fc.in_features
+    # network.fc = nn.Linear(num_ftrs, n_classes)
+    # print(network)
+    
+    #
+    network=torchvision.models.efficientnet_b1(pretrained=True)
+    num_ftrs = network.classifier[1].in_features
+    network.classifier[1]=nn.Linear(num_ftrs, n_classes)
     #CustomNet(1, 16, 32 ,64, 2)
     # definirea optimizatorului
 
@@ -300,3 +319,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

@@ -1,0 +1,32 @@
+data:
+  dataset_csv: '/home/cuda/Desktop/AvesalonRazvan/PROIECT_ANGIOGRAFII/CSV_angiografii_19.01.csv'
+  data_path: "/media/cuda/HDD 1TB  - DATE/AvesalonRazvanDate , Experimente/data/*"
+  annotation: clipping_points.json
+  img_size: [512,512]
+  split_per:
+    train: 0.8
+    valid: 0.1
+    test: 0.1
+
+train:
+  bs: 4
+  lr: 0.001
+  opt: Adam
+  epochs: 400
+  rotate_prob: 0.5
+  rotate_range: 35 
+  clip_limit: 8 
+  tile_grid_size: [8, 8] 
+  p_clahe: 0.5
+  blur_limit: [3, 7] 
+  sigma_limit: [0,6] 
+  p_gauss_blur: 0.5
+  gamma_limit: [90, 110]
+  p: 0.5
+  net: efficientb0
+  
+
+
+test:
+  threshold: 0.5
+

@@ -76,6 +76,7 @@ class RegersionClass(torch.utils.data.Dataset):
             clipping_points = json.load(f)
         
         bifurcation_point = clipping_points[str(frame_param)]
+      
         croped_colimator_img=self.crop_colimator(new_img,angio_loader)
         
       
@@ -83,15 +84,7 @@ class RegersionClass(torch.utils.data.Dataset):
         bifurcation_point[0]=bifurcation_point[0]-angio_loader['ImageEdges'][2]
         # print('Bifurcation point : ',bifurcation_point)
         # print(bifurcation_point[1], bifurcation_point[0])
-        # print(croped_colimator_img.shape)
-        # black=np.zeros(croped_colimator_img.shape)
-        # masked_gt=cv2.circle(black, (int(bifurcation_point[1]),int(bifurcation_point[0])), 5, [255,0,0], -1) 
-        # plt.subplot(1,2,1)
-        # plt.imshow(croped_colimator_img, cmap="gray")
-        # plt.subplot(1,2,2)
-        # plt.imshow(masked_gt , cmap="gray")
-        # plt.show()
-       
+        
         
         # new_img = cv2.resize(croped_colimator_img, self.img_size, interpolation=cv2.INTER_AREA)
         # print (croped_colimator_img.shape)
@@ -114,33 +107,23 @@ class RegersionClass(torch.utils.data.Dataset):
             transformed=self.geometrics_transforms (image=new_img,keypoints=list_of_keypoints)
             new_img=transformed['image']
             bifurcation_point=transformed['keypoints'][0]
-        
-        
-        
-        new_img=new_img.astype(np.uint8)
-        
+       	new_img=new_img.astype(np.uint8)
         if self.pixel_transforms != None:
-
-            list_of_keypoints=[]
-            list_of_keypoints.append(tuple(bifurcation_point))
-            transformed=self.pixel_transforms (image=new_img,keypoints=list_of_keypoints)
+            transformed=self.pixel_transforms (image=new_img)
             new_img=transformed['image']
-            bifurcation_point=transformed['keypoints'][0]
-            
         
-        black=np.zeros((512,512))
-        masked_gt=cv2.circle(black, (int(bifurcation_point[1]),int(bifurcation_point[0])), 5, [255,0,0], -1) 
-        # plt.subplot(1,2,1)
-        # plt.imshow(new_img, cmap="gray")
-        # plt.subplot(1,2,2)
-        # plt.imshow(masked_gt , cmap="gray")
-        # plt.show()
+        #black=np.zeros((512,512))
+        #masked_gt=cv2.circle(black, (int(bifurcation_point[1]),int(bifurcation_point[0])), 5, [255,0,0], -1) 
+        #plt.subplot(1,2,1)
+        #plt.imshow(new_img, cmap="gray")
+        #plt.subplot(1,2,2)
+        #plt.imshow(masked_gt , cmap="gray")
+        #plt.show()
+            
         bf=list(bifurcation_point)
         new_img=new_img*1/255 
         bf[0] = bf[0]*(1/255) 
         bf[1] = bf[1]*(1/255)
-        
-        print ('bf',bf) 
         img_3d=np.zeros((3,new_img.shape[0],new_img.shape[1]))
         img_3d[0,:,:]=new_img
         img_3d[1,:,:]=new_img
@@ -148,7 +131,6 @@ class RegersionClass(torch.utils.data.Dataset):
         tensor_y = torch.from_numpy(np.array(bf))
         tensor_x = torch.from_numpy(img_3d)
         
-      
             
     
         

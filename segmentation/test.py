@@ -12,16 +12,14 @@ from datetime import datetime
 import os , sys
 import cv2
 import glob
-from .angio_class import AngioClass
+from angio_class import AngioClass
 from torchmetrics import Dice
 import skimage.color
-
-#sys.path.append(r'D:\ai intro\Angiografii\PROIECT_ANGIOGRAFII\utils')
 from utils.blob_detector import blob_detector
-from utils.distances import pixels2mm, calcuate_distance
+from utils.distances import pixels2mm, calculate_distance
 import json
 import imageio
-
+from utils.Distances_counter import histogram_distance
 
 def overlap(input, pred):
 
@@ -174,7 +172,7 @@ def test(network, test_loader, dataframe, thresh=0.5):
                     dict['Distance'].append(
                         str("Can't calculate Distance For this frame ( No prediction )"))
                 else:
-                    distance = calcuate_distance(gt_coords_mm, pred_cord_mm)
+                    distance = calculate_distance(gt_coords_mm, pred_cord_mm)
                     dict['Distance'].append(distance)
 
                 dict['Dice_forground'].append(dice_score[1].item())
@@ -208,7 +206,7 @@ def main():
 
     yml_data = yaml.dump(config)
     directory = f"Test{datetime.now().strftime('%m%d%Y_%H%M')}"
-    parent_dir = r"D:\ai intro\Angiografii\PROIECT_ANGIOGRAFII\experiments\EXPERIMENTE\Experiment_Dice_index12052022_1338"
+    parent_dir = config['data']['parent_dir_exp']
     path = pt.Path(parent_dir)/directory
     path.mkdir(exist_ok=True)
     dir = r'Predictii_Overlap'
@@ -239,8 +237,7 @@ def main():
     test_loader = torch.utils.data.DataLoader(
         test_ds, batch_size=config["train"]["bs"], shuffle=False)
 
-    network = torch.load(
-        r"D:\ai intro\Angiografii\PROIECT_ANGIOGRAFII\experiments\EXPERIMENTE\Experiment_Dice_index12052022_1338\Weights\my_model12072022_0114_e450.pt")
+    network = torch.load(config['data']['model'])
 
     # print(f"# Test: {len(test_ds)}")
 
@@ -351,13 +348,45 @@ def main():
             frame = imageio.imread(dataf_ac['OVERLAP_path'][index])
             pred = imageio.imread(dataf_ac['PREDICTIE_path'][index])
             foo_Overlap = cv2.putText(
-                frame, f'{dice_forground}', (5, 25), cv2.FONT_HERSHEY_SIMPLEX, .4, (255, 255, 255))
-            foo_pred = cv2.putText(
-                frame, f'{dice_forground}', (5, 25), cv2.FONT_HERSHEY_SIMPLEX, .4, (255, 255, 255))
+                frame, 'Dice:', (5, 20), cv2.FONT_HERSHEY_SIMPLEX, .4, (255, 255, 255))
             foo_Overlap = cv2.putText(
-                foo_Overlap, f'{distance}', (5, 475), cv2.FONT_HERSHEY_SIMPLEX, .4, (255, 255, 255))
+                frame, f'{dice_forground:.2f}', (5, 35), cv2.FONT_HERSHEY_SIMPLEX, .4, (255, 255, 255))
             foo_pred = cv2.putText(
-                foo_pred, f'{distance}', (5, 475), cv2.FONT_HERSHEY_SIMPLEX, .4, (255, 255, 255))
+                frame, 'dice:', (5, 20), cv2.FONT_HERSHEY_SIMPLEX, .4, (255, 255, 255))
+            foo_pred = cv2.putText(
+                frame, f'{dice_forground:.2f}', (5, 35), cv2.FONT_HERSHEY_SIMPLEX, .4, (255, 255, 255))
+            foo_Overlap = cv2.putText(
+                foo_Overlap, 'Distance:', (5, 50), cv2.FONT_HERSHEY_SIMPLEX, .4, (255, 255, 255))
+            print (distance)
+            if (distance == "Can't calculate Distance For this frame ( No prediction )") or (distance[0] == "Can't calculate Distance For this frame ( No prediction )"):
+                foo_Overlap = cv2.putText(
+                    foo_Overlap, f'{distance}', (5, 65), cv2.FONT_HERSHEY_SIMPLEX, .4, (255, 255, 255))
+            else:
+                
+                dist =[]
+                for d in distance :
+                    d=float (d)
+                    d=round(d,2)
+                    print (d)
+                    dist.append(d)
+
+                distance=dist
+                
+            foo_Overlap = cv2.putText(
+                foo_Overlap, f'{distance}', (5, 65), cv2.FONT_HERSHEY_SIMPLEX, .4, (255, 255, 255))
+            
+            
+            if (distance == "Can't calculate Distance For this frame ( No prediction )") or (distance[0] == "Can't calculate Distance For this frame ( No prediction )"):
+                 foo_pred = cv2.putText(
+                    foo_pred, f'{distance}', (5, 65), cv2.FONT_HERSHEY_SIMPLEX, .4, (255, 255, 255))
+            else:
+               
+                for d in distance :
+                    d=float (d)
+                    d=round(d)
+            foo_pred = cv2.putText(
+                foo_pred, f'{distance}', (5, 65), cv2.FONT_HERSHEY_SIMPLEX, .4, (255, 255, 255))
+           
             movie_overlap_gif.append(foo_Overlap)
             movie_predictie_gif.append(foo_pred)
 
@@ -366,6 +395,7 @@ def main():
         imageio.mimsave(os.path.join(gif_path, 'PREDICTIE_GIF'+'_' +
                         str(acquistion)+'.gif'), movie_predictie_gif, duration=1)
 
+    histogram_distance(dataf,path)
     dataf.to_csv(f"{path}\\CSV_TEST.csv")
 
 

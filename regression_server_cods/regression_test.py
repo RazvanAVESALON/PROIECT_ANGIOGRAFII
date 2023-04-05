@@ -17,7 +17,6 @@ import imageio
 from regresie import RegersionClass
 from distances_regression import calculate_distance,mm2pixels,pixels2mm
 import albumentations as A
-from acq_hist_maker import hist_metrics_per_acq
 # def (dataset_df):
 
 #     for i in range()
@@ -50,7 +49,7 @@ def overlap_3_chanels(gt, pred, input):
 
     print(tp.min(), tp.max(), fp.min(), fp.max(), fn.min(), fn.max())
 
-    img = np.zeros((256, 256, 3), np.float32)
+    img = np.zeros((512, 512, 3), np.float32)
     img[:, :, 1] = tp
     img[:, :, 2] = fp
     img[:, :, 0] = fn
@@ -71,7 +70,7 @@ def mse_histogram_maker(mse, path):
     plt.title('Frames per Image')
     plt.xlabel('RMSE Values per interval')
     plt.ylabel("Count of frames per rmse value ")
-    plt.savefig(f"{path}\\Histograma_rmse")
+    plt.savefig(f"{path}/Histograma_rmse")
 
 
 def test(network, test_loader, dataframe, thresh=0.5):
@@ -127,7 +126,7 @@ def test(network, test_loader, dataframe, thresh=0.5):
                 gt_coords_mm=pixels2mm(target_pred,angio_loader['MagnificationFactor'],angio_loader['ImageSpacing'])
                 pred_cord_mm=pixels2mm(frame_pred,angio_loader['MagnificationFactor'],angio_loader['ImageSpacing'])
                 print('coord in mm ',pred_cord_mm,gt_coords_mm)
-                if not len(pred_cord_mm) and not len(pred_cord_mm):
+                if pred_cord_mm==[] and pred_cord_mm==[]:
                     logs_dict['Distance'].append( str("Can't calculate Distance For this frame ( No prediction )" ) )
                 else:
                     distance=calculate_distance(gt_coords_mm,pred_cord_mm)
@@ -158,7 +157,7 @@ def main():
 
     yml_data = yaml.dump(config)
     directory = f"Test{datetime.now().strftime('%m%d%Y_%H%M')}"
-    parent_dir = r"D:\ai intro\Angiografii\PROIECT_ANGIOGRAFII\experiments\Experimente Regresie\Experiment_MSE02112023_0136"
+    parent_dir = r"/media/cuda/HDD 1TB  - DATE/AvesalonRazvanDate , Experimente/Experimente/Experiment_MSE04012023_1445"
     path = pt.Path(parent_dir)/directory
     path.mkdir(exist_ok=True)
     dir = r'Predictii_Overlap'
@@ -170,7 +169,7 @@ def main():
     overlap_pred_path = pt.Path(path)/dir
     overlap_pred_path.mkdir(exist_ok=True)
 
-    f = open(f"{path}\\yaml_config.yml", "w+")
+    f = open(f"{path}/yaml_config.yml", "w+")
     f.write(yml_data)
     f.close()
     path_construct = glob.glob(r"E:\__RCA_bif_detection\data\*")
@@ -193,7 +192,7 @@ def main():
         test_ds, batch_size=config["train"]["bs"], shuffle=False)
 
     network = torch.load(
-        r"D:\ai intro\Angiografii\PROIECT_ANGIOGRAFII\experiments\Experimente Regresie\Experiment_MSE02112023_0136\Weights\my_model02122023_0037_e100.pt")
+        r"/media/cuda/HDD 1TB  - DATE/AvesalonRazvanDate , Experimente/Experimente/Experiment_MSE04012023_1445/Weights/my_model04022023_0726_e250.pt")
 
     # print(f"# Test: {len(test_ds)}")
 
@@ -232,8 +231,6 @@ def main():
     dataf["MeanMSE"] = mean_MSE
     dataf["MeanDIstance"] = mean_distance
 
-    hist_metrics_per_acq(dataf,path)
-    
     overlap_path = []
     prediction_path = []
     for batch_index, batch in enumerate(test_loader):
@@ -333,7 +330,7 @@ def main():
                         str(acquistion)+'.gif'), movie_predictie_gif, duration=1)
 
 
-    dataf.to_csv(f"{path}\\CSV_TEST.csv")
+    dataf.to_csv(f"{path}/CSV_TEST.csv")
 
 
 if __name__ == "__main__":

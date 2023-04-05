@@ -1,50 +1,64 @@
+from json.tool import main
+import matplotlib.pyplot as plt
+import torch
+import torch.nn as nn
+import torchvision
+import torchvision.transforms as T
+import torchmetrics
+import yaml
+import torch
+import torch.nn as nn
+from datetime import datetime
 import pandas as pd
 import pathlib as pt
 import yaml
-import torch
-import torch.nn.functional as F
-import torchvision
-import torchvision.transforms as T
+import torch.nn as nn
 import monai.transforms as TR
 import torchmetrics
 from tqdm import tqdm
 from datetime import datetime
-from angio_class import AngioClass, plot_acc_loss
-from monai.losses import DiceCELoss
+import sys
 from torchmetrics import MeanSquaredError
+import matplotlib.pyplot as plt
 from comet_ml import Experiment
-import segmentation_models_pytorch as smp
-from torchsummary import summary 
-from UNet import UNet
-from torch import nn 
-# class DiceIndex(torch.nn.Module):
-#     def __init__(self):
-#         super(DiceIndex, self).__init__()
+from regresie import RegersionClass
+import albumentations as A 
 
-#     def forward(self, pred, target):
+def plot_acc_loss(result, path):
+    acc = result['MSE']['train']
+    loss = result['loss']['train']
+    val_acc = result['MSE']['valid']
+    val_loss = result['loss']['valid']
 
-#         smooth = 1.
-#     #    iflat = pred.view(-1)
-#     #    tflat = target.view(-1)
+    plt.figure(figsize=(15, 5))
+    plt.subplot(121)
+    plt.plot(acc, label='Train')
+    plt.plot(val_acc, label='Validation')
+    plt.title('MSE', size=15)
+    plt.legend()
+    plt.grid(True)
+    plt.ylabel('MSE')
+    plt.xlabel('Epoch')
 
-#         intersection = (pred * target).sum()
-#         A_sum = torch.sum(pred)
-#         B_sum = torch.sum(target)
-#         return ((2. * intersection) / (A_sum + B_sum + smooth))
+    plt.subplot(122)
+    plt.plot(loss, label='Train')
+    plt.plot(val_loss, label='Validation')
+    plt.title('Loss', size=15)
+    plt.legend()
+    plt.grid(True)
+    plt.ylabel('Loss')
+    plt.xlabel('Epoch')
+
+    plt.savefig(f"{path}/Curbe de învățare")
 
 
-# class DiceLoss(torch.nn.Module):
-#     def __init__(self):
-#         super(DiceLoss, self).__init__()
-#         self.dice_index = DiceIndex()
-
-#     def forward(self, pred, target):
-#         return 1 - self.dice_index(pred, target)
+def set_parameter_requires_grad(model, freeze):
+    if freeze:
+        for param in model.parameters():
+            param.requires_grad = False
 
 
-# def split_frames(image,annotation):
-
-def train(network, train_loader, valid_loader, experiment ,criterion, opt, epochs, thresh=0.5, weights_dir='weights', save_every_ep=10):
+def train(network, train_loader, valid_loader, exp, criterion, opt, epochs, thresh=0.5, weights_dir='weights', save_every_ep=50):
 
     total_loss = {'train': [], 'valid': []}
     total_dice = {'train': [], 'valid': []}
@@ -71,20 +85,16 @@ def train(network, train_loader, valid_loader, experiment ,criterion, opt, epoch
             running_average = 0.0
 
             if phase == 'train':
-                network.train()  # Set model to training mode
+                network.train()  
             else:
-                network.eval()   # Set model to evaluate mode
-
+                network.eval()   
             with tqdm(desc=phase, unit=' batch', total=len(loaders[phase].dataset)) as pbar:
                 for data in loaders[phase]:
                     ins, tgs, idx = data
-                    # print(data)
-                    #print(type(ins), type(tgs))
+                    
                     ins = ins.to(device)
                     tgs = tgs.to(device)
-                    #print (ins.size(),tgs.size())
-
-                    # seteaza toti gradientii la zero, deoarece PyTorch acumuleaza valorile lor dupa mai multe backward passes
+                   
                     opt.zero_grad()
 
                     with torch.set_grad_enabled(phase == 'train'):
@@ -101,35 +111,27 @@ def train(network, train_loader, valid_loader, experiment ,criterion, opt, epoch
                         # output[:, 1, :, :] #=> 8 x 128 x 128
                         # tgs => 8 x 1 x 128 x 128
                         # tgs.squeeze() #=> 8 x 128 x 128
-
+                        #print('Output ', output.shape , output.dtype , output.min(), output.max())
+                        #print('target',tgs.shape , tgs.dtype , tgs.min(), tgs.max())
                         # se calculeaza eroarea/loss-ul
-
-                        loss = criterion(output[:, :, :, :], tgs)
-
-                        # deoarece reteaua nu include un strat de softmax, predictia finala trebuie calculata manual
-                        current_predict = F.softmax(output, dim=1)[
-                            :, 1].float()
-                        current_predict[current_predict >= thresh] = 1.0
-                        current_predict[current_predict < thresh] = 0.0
+                        loss = criterion(output, tgs.squeeze())
 
                         #plt.imshow(current_predict[0].cpu().detach().numpy(), cmap='gray')
                         # plt.show()
 
                         if 'cuda' in device.type:
-                            current_predict = current_predict.cpu()
-                            current_target = tgs.cpu().type(torch.int).squeeze()
+                            output = output.cpu()
+                            tgs = tgs.cpu().type(torch.int).squeeze()
                         else:
-                            current_predict = current_predict
-                            current_target = tgs.type(torch.int).squeeze()
+                            tgs = tgs.type(torch.int).squeeze()
 
                         # plt.imshow(current_target[0].cpu().detach().numpy())
                         # plt.show()
 
                         #print(current_predict.shape, current_target.shape)
-                        #print(current_predict.dtype, current_target.dtype)
-
-                        dice_idx = metric(current_predict, current_target)
-                        print(dice_idx.item)
+                        #print(current_predict.dtype, current_target.dtype
+                        mse = metric(output, tgs)
+                        # print(dice_idx.item)
 
                         #print(dice_idx, dice_idx.shape, dice_idx.dtype )
                         # print(current_predict,current_target)
@@ -143,7 +145,7 @@ def train(network, train_loader, valid_loader, experiment ,criterion, opt, epoch
 
                     running_loss += loss.item() * ins.size(0)
 
-                    running_average += dice_idx.item() * ins.size(0)
+                    running_average += mse.item() * ins.size(0)
 
                     #print(running_average, dice_idx.item())
                     #print(running_loss, loss.item())
@@ -152,7 +154,7 @@ def train(network, train_loader, valid_loader, experiment ,criterion, opt, epoch
                         # salvam ponderile modelului dupa fiecare epoca
                         if ep % save_every_ep == 0:
                             torch.save(
-                                network, f"{weights_dir}\\my_model{datetime.now().strftime('%m%d%Y_%H%M')}_e{ep}.pt")
+                                network, f"{weights_dir}/my_model{datetime.now().strftime('%m%d%Y_%H%M')}_e{ep}.pt")
 
                     #     model_path = f"{weights_dir}\\model_epoch{ep}.pth"
                     #     torch.save({'epoch': ep,
@@ -167,67 +169,54 @@ def train(network, train_loader, valid_loader, experiment ,criterion, opt, epoch
                 total_loss[phase].append(
                     running_loss/len(loaders[phase].dataset))
 
+                loss_value = running_loss/len(loaders[phase].dataset)
+                mse_value = running_average/len(loaders[phase].dataset)
                 # Calculam acuratetea pt toate batch-urile dintr-o epoca
                 total_dice[phase].append(
                     running_average/len(loaders[phase].dataset))
 
-                postfix = f'error {total_loss[phase][-1]:.4f} dice {dice_idx*100:.2f}%'
+                postfix = f'error {total_loss[phase][-1]:.4f} MSE {mse*100:.2f}%'
                 pbar.set_postfix_str(postfix)
 
-                experiment.log_metrics(
-                    {f"{phase}_dice": total_dice[phase][-1], "loss": total_loss[-1]}, epoch=ep)
+                exp.log_metrics({f"{phase}MSE": mse_value,
+                                f"{phase}loss": loss_value}, epoch=ep)
 
                 # Resetam pt a acumula valorile dintr-o noua epoca
 
-    return {'loss': total_loss, 'dice': total_dice}
+    return {'loss': total_loss, 'MSE': total_dice}
 
 
 def main():
+
     print(f"pyTorch version {torch.__version__}")
     print(f"torchvision version {torchvision.__version__}")
     print(f"torchmetrics version {torchmetrics.__version__}")
     print(f"CUDA available {torch.cuda.is_available()}")
-    
+
     config = None
     with open('config.yaml') as f:  # reads .yml/.yaml files
         config = yaml.safe_load(f)
-    
+
     experiment = Experiment(
         api_key="wwQKu3dl9l1bRZOpeKs0y3r8S",
         project_name="general",
         workspace="razvanavesalon",)
 
-    exp_name = f"Experiment_Dice_index{datetime.now().strftime('%m%d%Y_%H%M')}"
+    exp_name = f"Experiment_MSE{datetime.now().strftime('%m%d%Y_%H%M')}"
 
-    cwd=pt.Path.cwd()
-    print (cwd)
-    exp_path = cwd.parent/'experiments'
-    exp_path = exp_path/ exp_name
+    path_1=pt.Path('/media/cuda/HDD 1TB  - DATE/AvesalonRazvanDate , Experimente/Experimente')
+    exp_path = path_1/exp_name  # get current working directory
     exp_path.mkdir(exist_ok=True)
     dir = "Weights"
     path = pt.Path(exp_path)/dir
     path.mkdir(exist_ok=True)
+    #network = UNet(n_channels=1, n_classes=2,final_activation=nn.Sigmoid())
 
-    #network = UNet(n_channels=1, n_classes=2,final_activation=nn.Softmax(dim=1))
-
-    network = smp.Unet(
-        encoder_name="efficientnet-b1",        # choose encoder, e.g. mobilenet_v2 or efficientnet-b7
-        # use `imagenet` pre-trained weights for encoder initialization
-        encoder_weights="imagenet",
-        # model input channels (1 for gray-scale images, 3 for RGB, etc.)
-        in_channels=1,
-        # model output channels (number of classes in your dataset)
-        classes=2,
-    )
-    summary(network)
   
-  
-    
-
     experiment.log_parameters(config)
 
     yml_data = yaml.dump(config)
-    f = open(f"{path}\\yaml_config.yml", "w+")
+    f = open(f"{path}/yaml_config.yml", "w+")
     f.write(yml_data)
     f.close()
 
@@ -235,25 +224,40 @@ def main():
 
         TR.ToTensord(keys="img"),
     ])
+ # pixel_t = TR.Compose([
+    #     TR.GaussianSmoothd(keys="img", sigma=config['train']['sigma']),
+    #     TR.RandGibbsNoised(
+    #         keys="img", prob=config['train']['gibbs_noise_prob'], alpha=config['train']['alpha']),
+    #     TR.RandAdjustContrastd(
+    #         keys="img", prob=config['train']['contrast_prob'], gamma=config['train']['contrast_gamma']),
+    # ])
+    
+    pixel_t=A.Compose([
+        A.CLAHE(clip_limit=config['train']['clip_limit'], tile_grid_size=config['train']['tile_grid_size'], always_apply=False, p=config['train']['p_clahe']),
+        A.GaussianBlur(blur_limit=config['train']['blur_limit'], sigma_limit=config['train']['sigma_limit'], always_apply=False, p=config['train']['p_gauss_blur']),
+        A.RandomGamma(gamma_limit=config['train']['gamma_limit'], eps=None, always_apply=False, p=config['train']['p']),
+        
+        ])
 
-    pixel_t = TR.Compose([
-        TR.GaussianSmoothd(keys="img", sigma=config['train']['sigma']),
-        TR.RandGibbsNoised(
-            keys="img", prob=config['train']['gibbs_noise_prob'], alpha=config['train']['alpha']),
-        TR.RandAdjustContrastd(
-            keys="img", prob=config['train']['contrast_prob'], gamma=config['train']['contrast_gamma']),
-    ])
+    geometric_t= A.Compose([
+        A.Rotate(limit=config['train']['rotate_range']),
+        A.Resize(height=config['data']['img_size'][0] , width=config['data']['img_size'][1])
+    ],keypoint_params=A.KeypointParams(format='yx', remove_invisible=False))
+    
+    g_t= A.Compose([
+        A.Resize(height=config['data']['img_size'][0] , width=config['data']['img_size'][1])
+    ],keypoint_params=A.KeypointParams(format='yx', remove_invisible=False))
+    
+    # geometric_t = TR.Compose([
 
-    geometric_t = TR.Compose([
-
-        TR.RandRotated(keys=["img", "seg"], prob=config['train']['rotate_prob'],
-                       range_x=config['train']['rotate_range'], mode=['bilinear', 'nearest']),
-        TR.RandFlipd(keys=["img", "seg"], prob=config['train']['flip_prob'],
-                     spatial_axis=config['train']['flip_spatial_axis']),
-        TR.RandZoomd(keys=["img", "seg"], prob=config['train']['zoom_prob'],
-                     min_zoom=config['train']['min_zoom'], max_zoom=config['train']['max_zoom'])
-        #TR.RandSpatialCropSamplesd(keys=["img", "seg"],num_samples=config['train']['rand_crop_samples'], roi_size=config['train']['rand_crop_size'],random_size=False),
-    ])
+    #     TR.RandRotated(keys=["img", "seg"], prob=config['train']['rotate_prob'],
+    #                    range_x=config['train']['rotate_range'], mode=['bilinear', 'nearest']),
+    #     TR.RandFlipd(keys=["img", "seg"], prob=config['train']['flip_prob'],
+    #                  spatial_axis=config['train']['flip_spatial_axis']),
+    #     TR.RandZoomd(keys=["img", "seg"], prob=config['train']['zoom_prob'],
+    #                  min_zoom=config['train']['min_zoom'], max_zoom=config['train']['max_zoom'])
+    #     #TR.RandSpatialCropSamplesd(keys=["img", "seg"],num_samples=config['train']['rand_crop_samples'], roi_size=config['train']['rand_crop_size'],random_size=False),
+    # ])
 
     #path_construct = glob.glob(config["data"]['data_path'])
     #path_list = create_dataset_csv(path_construct)
@@ -266,21 +270,32 @@ def main():
     dataset_df = pd.read_csv(config['data']['dataset_csv'])
 
     train_df = dataset_df.loc[dataset_df["subset"] == "train"]
-    train_ds = AngioClass(train_df, img_size=config['data']['img_size'],
-                          geometrics_transforms=geometric_t, pixel_transforms=pixel_t)
+    train_ds = RegersionClass(train_df, img_size=config['data']['img_size'],pixel_transforms=pixel_t,geometrics_transforms=geometric_t)
+
     train_loader = torch.utils.data.DataLoader(
-        train_ds, batch_size=config['train']['bs'], shuffle=True,)
-    print(train_loader)
+        train_ds, batch_size=config['train']['bs'], shuffle=True,drop_last=True)
 
     valid_df = dataset_df.loc[dataset_df["subset"] == "valid", :]
-    valid_ds = AngioClass(
-        valid_df, img_size=config['data']['img_size'], pixel_transforms=pixels)
+    valid_ds = RegersionClass(valid_df, img_size=config['data']['img_size'],geometrics_transforms=g_t)
     valid_loader = torch.utils.data.DataLoader(
-        valid_ds, batch_size=config['train']['bs'], shuffle=False)
+        valid_ds, batch_size=config['train']['bs'], shuffle=False,drop_last=True)
 
     print(f"# Train: {len(train_ds)} # Valid: {len(valid_ds)}")
 
-    criterion = DiceCELoss(to_onehot_y=True, batch=config['train']['bs'])
+  # Specificarea functiei loss
+    criterion = nn.MSELoss()
+    n_classes = 2
+    #network = torchvision.models.resnet18(pretrained=False)
+    #set_parameter_requires_grad(network, freeze=False)
+    #num_ftrs = network.fc.in_features
+    #network.fc = nn.Linear(num_ftrs, n_classes)
+    
+    network=torchvision.models.efficientnet_b0(pretrained=False)
+    num_ftrs = network.classifier[1].in_features
+    network.classifier[1]=nn.Linear(num_ftrs, n_classes)
+    print(network)
+    #CustomNet(1, 16, 32 ,64, 2)
+    # definirea optimizatorului
 
     if config['train']['opt'] == 'Adam':
         opt = torch.optim.Adam(network.parameters(), lr=config['train']['lr'])
@@ -290,10 +305,12 @@ def main():
         opt = torch.optim.RMSprop(
             network.parameters(), lr=config['train']['lr'])
 
-    history = train(network, train_loader, valid_loader,experiment,  criterion, opt,
+    history = train(network, train_loader, valid_loader, experiment, criterion, opt,
                     epochs=config['train']['epochs'], thresh=config['test']['threshold'], weights_dir=path)
     plot_acc_loss(history, path)
 
 
 if __name__ == "__main__":
     main()
+
+
