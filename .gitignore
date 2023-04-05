@@ -8,3 +8,7 @@ __pycache__/distances.cpython-39.pyc
 *.gif
 *.png
 *.pt
+regression_server_cods/data/00e91486f2fd40f198e7e09216937155/48809182/angio_loader_header.json
+*.json
+csv_metadata.py
+*.npz
