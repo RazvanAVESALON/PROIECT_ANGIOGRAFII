@@ -12,13 +12,13 @@ from datetime import datetime
 import os , sys
 import cv2
 import glob
-from angio_class import AngioClass
+from .angio_class import AngioClass
 from torchmetrics import Dice
 import skimage.color
 
-sys.path.append(r'D:\ai intro\Angiografii\PROIECT_ANGIOGRAFII\utils')
-from blob_detector import blob_detector
-from distances import pixels2mm, calcuate_distance
+#sys.path.append(r'D:\ai intro\Angiografii\PROIECT_ANGIOGRAFII\utils')
+from utils.blob_detector import blob_detector
+from utils.distances import pixels2mm, calcuate_distance
 import json
 import imageio
 

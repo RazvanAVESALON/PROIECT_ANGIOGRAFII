@@ -1,7 +1,7 @@
 from __future__ import annotations
 import numpy as np
 import math
-from blob_detector import blob_detector
+from .blob_detector import blob_detector
 import cv2
 
 
