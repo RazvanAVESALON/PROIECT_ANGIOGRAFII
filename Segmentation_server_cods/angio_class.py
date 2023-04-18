@@ -1,24 +1,9 @@
-
-from hashlib import new
-
-from tkinter import Y, image_names
 import matplotlib.pyplot as plt
 import numpy as np
-import pandas as pd
-import pathlib as pt
-import random
 import yaml
 import cv2
 import json
-import os
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
-import torchvision
-import torchvision.transforms as T
-import torchmetrics
-import monai.transforms as TR
-import torchvision.transforms.functional as TF 
 
 config = None
 with open('config.yaml') as f:  # reads .yml/.yaml files
@@ -104,14 +89,6 @@ class AngioClass(torch.utils.data.Dataset):
         
             tensor_x=result["img"]
             tensor_y=result["seg"]
-
- 
-        #print (tensor_x.min(),tensor_y.min(),tensor_x.max(),tensor_y.max())
-       
-        #plt.imshow(tensor_x[0], cmap="gray")
-        #plt.show()
-        #plt.imshow(tensor_y[0] , cmap="gray")
-        #plt.show()
 
         return tensor_x.float(), tensor_y.int() , idx 
     

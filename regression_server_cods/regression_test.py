@@ -15,11 +15,8 @@ import skimage.color
 import json
 import imageio
 from regresie import RegersionClass
-from distances_regression import calculate_distance,mm2pixels,pixels2mm
+from distances_regression import calculate_distance, mm2pixels, pixels2mm
 import albumentations as A
-# def (dataset_df):
-
-#     for i in range()
 
 
 def overlap(input, pred):
@@ -30,14 +27,12 @@ def overlap(input, pred):
     pred = cv2.resize(pred, dsize, interpolation=cv2.INTER_AREA)
     input = cv2.resize(input, dsize, interpolation=cv2.INTER_AREA)
     dst = cv2.addWeighted(input, 0.7, pred, 0.3, 0)
-    print(dst.shape, dst.dtype, dst.min(), dst.max())
+
     return dst
 
 
-def overlap_3_chanels(gt, pred, input):
+def overlap_3_chanels(gt, pred, input, size):
 
-    #print(input.shape, input.dtype, input.min(), input.max())
-    #print(pred.shape, pred.dtype, pred.min(), pred.max())
     print(input.shape)
     pred = pred.astype(np.int32)
     gt = gt.astype(np.int32)
@@ -49,18 +44,14 @@ def overlap_3_chanels(gt, pred, input):
 
     print(tp.min(), tp.max(), fp.min(), fp.max(), fn.min(), fn.max())
 
-    img = np.zeros((512, 512, 3), np.float32)
+    img = np.zeros((size[0], size[1], 3), np.float32)
     img[:, :, 1] = tp
     img[:, :, 2] = fp
     img[:, :, 0] = fn
 
     input = skimage.color.gray2rgb(input)
-    print(img.min(), img.max(), img.dtype, img.shape)
-    print(input.min(), input.max(), input.dtype, input.shape)
+
     dst = cv2.addWeighted(input, 0.7, img, 0.3, 0)
-    #dst = cv2.resize(dst,dsize,interpolation=cv2.INTER_AREA)
-    # plt.imshow(img)
-    # plt.show()
 
     return dst
 
@@ -79,9 +70,8 @@ def test(network, test_loader, dataframe, thresh=0.5):
 
     metric = MeanSquaredError()
 
-    logs_dict = {'MSE': [], 'Patient': [], 'Acquistion': [], 'Frame': [], 'Distance':[]}
-
-    # mse_column={'MSE':[]}
+    logs_dict = {'MSE': [], 'Patient': [],
+                 'Acquistion': [], 'Frame': [], 'Distance': []}
     network.eval()
     with tqdm(desc='test', unit=' batch', total=len(test_loader.dataset)) as pbar:
 
@@ -89,27 +79,16 @@ def test(network, test_loader, dataframe, thresh=0.5):
         for data in test_loader:
 
             ins, tgs, index = data
-            print(index)
-
             network.to(device)
             ins = ins.to(device)
             metric = metric.to(device)
             tgs = tgs.to(device)
             output = network(ins)
-            print(output, tgs)
 
-            print(output)
-           # if 'cuda' in device.type:
-            # tgs = tgs.cpu()
-            # output=output.cpu()
-
-            #print (current_predict.shape, tgs.shape)
             for batch_idx, (frame_pred, target_pred) in enumerate(zip(output, tgs)):
-                print(frame_pred)
-                #frame_pred=frame_pred.int()
+
                 MSE_score = metric(frame_pred, target_pred)
 
-                print('MSE', MSE_score)
                 patient, acquisition, frame, header, annotations = test_loader.dataset.csvdata(
                     (index[batch_idx].numpy()))
                 # print(header)
@@ -119,18 +98,21 @@ def test(network, test_loader, dataframe, thresh=0.5):
 
                 with open(header) as f:
                     angio_loader = json.load(f)
-                print('frame_pred',frame_pred)
-                frame_pred=frame_pred.cpu().detach().numpy()
-                target_pred=target_pred.cpu().detach().numpy()
-                print('frame_pred',frame_pred)
-                gt_coords_mm=pixels2mm(target_pred,angio_loader['MagnificationFactor'],angio_loader['ImageSpacing'])
-                pred_cord_mm=pixels2mm(frame_pred,angio_loader['MagnificationFactor'],angio_loader['ImageSpacing'])
-                print('coord in mm ',pred_cord_mm,gt_coords_mm)
-                if pred_cord_mm==[] and pred_cord_mm==[]:
-                    logs_dict['Distance'].append( str("Can't calculate Distance For this frame ( No prediction )" ) )
+
+                frame_pred = frame_pred.cpu().detach().numpy()
+                target_pred = target_pred.cpu().detach().numpy()
+
+                gt_coords_mm = pixels2mm(
+                    target_pred, angio_loader['MagnificationFactor'], angio_loader['ImageSpacing'])
+                pred_cord_mm = pixels2mm(
+                    frame_pred, angio_loader['MagnificationFactor'], angio_loader['ImageSpacing'])
+
+                if pred_cord_mm == [] and pred_cord_mm == []:
+                    logs_dict['Distance'].append(
+                        str("Can't calculate Distance For this frame ( No prediction )"))
                 else:
-                    distance=calculate_distance(gt_coords_mm,pred_cord_mm)
-                  
+                    distance = calculate_distance(gt_coords_mm, pred_cord_mm)
+
                     logs_dict['Distance'].append(distance)
 
                 logs_dict['MSE'].append(MSE_score.cpu().detach().numpy())
@@ -144,8 +126,6 @@ def test(network, test_loader, dataframe, thresh=0.5):
         print(MSE_score)
 
         print(f'[INFO] MSE score is {MSE_score:.2f} %')
-        # dataframe['MSE']=mse_column['MSE']
-
         return logs_dict
 
 
@@ -172,29 +152,22 @@ def main():
     f = open(f"{path}/yaml_config.yml", "w+")
     f.write(yml_data)
     f.close()
-    path_construct = glob.glob(r"E:\__RCA_bif_detection\data\*")
 
-    # path_list=create_dataset_csv(path_construct)
-    #dataset_df = pd.DataFrame(path_list)
+    resize = A.Compose([
+        A.Resize(height=config['data']['img_size'][0],
+                 width=config['data']['img_size'][1])
+    ], keypoint_params=A.KeypointParams(format='yx', remove_invisible=False))
 
-    #dataset_df = split_dataset(dataset_df, split_per=config['data']['split_per'], seed=1)
-    #print (dataset_df.head(3))
-    resize= A.Compose([
-        A.Resize(height=config['data']['img_size'][0] , width=config['data']['img_size'][1])
-    ],keypoint_params=A.KeypointParams(format='yx', remove_invisible=False))
-    
     dataset_df = pd.read_csv(config['data']['dataset_csv'])
     test_df = dataset_df.loc[dataset_df["subset"] == "test", :]
-    test_ds = RegersionClass(test_df, img_size=config["data"]["img_size"],geometrics_transforms=resize)
-    # print(test_ds[0])
+    test_ds = RegersionClass(
+        test_df, img_size=config["data"]["img_size"], geometrics_transforms=resize)
 
     test_loader = torch.utils.data.DataLoader(
         test_ds, batch_size=config["train"]["bs"], shuffle=False)
 
     network = torch.load(
         r"/media/cuda/HDD 1TB  - DATE/AvesalonRazvanDate , Experimente/Experimente/Experiment_MSE04012023_1445/Weights/my_model04022023_0726_e250.pt")
-
-    # print(f"# Test: {len(test_ds)}")
 
     test_set_CSV = test(network, test_loader, test_df,
                         thresh=config['test']['threshold'])
@@ -218,7 +191,6 @@ def main():
 
             else:
                 sum_distance += dataf_patient['Distance'][index]
-                   
 
         print(type(dataf_patient), len(dataf_patient))
         print(sum_mse, sum_distance)
@@ -242,18 +214,13 @@ def main():
         x = x.type(torch.cuda.FloatTensor)
 
         y_pred = network(x.to(device='cuda:0'))
-       # print( y_pred.shape)
-       # print (len(x),x.shape)
 
         for step, (input, gt, pred) in enumerate(zip(x, y, y_pred)):
-            #print (pred.shape, img.shape,gt.shape)
-            # print(pred.shape)
-            # print(pred.shape, pred.min(), pred.max())
 
             np_input = input.cpu().detach().numpy()*255
-            gt = gt.cpu().detach().numpy()*255
-            print("Inputul  ESTE ", np_input.shape)
-            pred = pred.cpu().detach().numpy()*255
+            gt = gt.cpu().detach().numpy()*config['data']['img_size'][0]
+
+            pred = pred.cpu().detach().numpy()*config['data']['img_size'][1]
 
             black = np.zeros(np_input.shape[1:3])
             masked_gt = cv2.circle(
@@ -262,32 +229,20 @@ def main():
             masked_pred = cv2.circle(
                 black2, (int(pred[1]), int(pred[0])), 5, [255, 255, 255], -1)
 
-            #print (pred.shape,input.shape)
-            #print(np_gt.dtype,np_gt.shape, np_gt.min(),np_gt.max())
-            # dst=overlap(np_input[0],pred)
             overlap_colors = overlap_3_chanels(
-                masked_gt, masked_pred, np_input[0])
+                masked_gt, masked_pred, np_input[0], config['data']['img_size'])
 
-            # plt.axis('off')
-            # plt.title('Prediction ')
-            # plt.imshow(pred, cmap='gray')
-            # plt.savefig(f"{path}\\Măști_frame{batch_index}_{step}.png")
-
-            # plt.title('Overlap ')
-            # plt.imshow(np_input[0],cmap='gray',interpolation=None)
-            # plt.imshow(pred,cmap='jet',interpolation=None,alpha=0.8)
-            # plt.savefig(f"{path}\\OVERLAP_frame{batch_index}_{step}.png")
-
-            #cv2.imwrite(os.path.join(path, 'OVERLAP'+'_'+str(batch_index)+'_'+str(step)+'.png'),dst)
             frame = str(test_set_CSV['Frame'][index[step]])
             pat_id = str(test_set_CSV['Patient'][index[step]])
             acn_id = str(test_set_CSV['Acquistion'][index[step]])
-            
-            curr_overlap_path = str(overlap_pred_path/f"OVERLAP_Colored_{pat_id}_{acn_id}-{frame}.png")
-            curr_prediction_path = str(overlap_pred_path/f"PREDICTIE{pat_id}_{acn_id}-{frame}.png")
+
+            curr_overlap_path = str(
+                overlap_pred_path/f"OVERLAP_Colored_{pat_id}_{acn_id}-{frame}.png")
+            curr_prediction_path = str(
+                overlap_pred_path/f"PREDICTIE{pat_id}_{acn_id}-{frame}.png")
             overlap_path.append(curr_overlap_path)
             prediction_path.append(curr_prediction_path)
-            
+
             cv2.imwrite(curr_overlap_path, overlap_colors)
             cv2.imwrite(curr_prediction_path, pred*255)
 
@@ -316,11 +271,12 @@ def main():
                 frame, f'{mse:.2f}', (5, 35), cv2.FONT_HERSHEY_SIMPLEX, .4, (255, 255, 255))
             foo_Overlap = cv2.putText(
                 foo_Overlap, 'Distance:', (5, 50), cv2.FONT_HERSHEY_SIMPLEX, .4, (255, 255, 255))
-            print (distance)
-            foo_Overlap = cv2.putText(foo_Overlap, f'{distance:.2f}', (5, 65), cv2.FONT_HERSHEY_SIMPLEX, .4, (255, 255, 255))
-            foo_pred = cv2.putText(foo_pred, f'{distance:.2f}', (5, 65), cv2.FONT_HERSHEY_SIMPLEX, .4, (255, 255, 255))
+            print(distance)
+            foo_Overlap = cv2.putText(
+                foo_Overlap, f'{distance:.2f}', (5, 65), cv2.FONT_HERSHEY_SIMPLEX, .4, (255, 255, 255))
+            foo_pred = cv2.putText(
+                foo_pred, f'{distance:.2f}', (5, 65), cv2.FONT_HERSHEY_SIMPLEX, .4, (255, 255, 255))
 
-           
             movie_overlap_gif.append(foo_Overlap)
             movie_predictie_gif.append(foo_pred)
 
@@ -328,7 +284,6 @@ def main():
                         str(acquistion)+'.gif'), movie_overlap_gif, duration=1)
         imageio.mimsave(os.path.join(gif_path, 'PREDICTIE_GIF'+'_' +
                         str(acquistion)+'.gif'), movie_predictie_gif, duration=1)
-
 
     dataf.to_csv(f"{path}/CSV_TEST.csv")
 

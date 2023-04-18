@@ -9,7 +9,7 @@ import torch
 import torch.nn.functional as F
 from tqdm import tqdm
 from datetime import datetime
-import os , sys
+import os
 import cv2
 import glob
 from angio_class import AngioClass
@@ -33,10 +33,9 @@ def overlap(input, pred):
     return dst
 
 
-def overlap_3_chanels(gt, pred, input):
+def overlap_3_chanels(gt, pred, input,size):
 
-    #print(input.shape, input.dtype, input.min(), input.max())
-    #print(pred.shape, pred.dtype, pred.min(), pred.max())
+   
     width = int(512)
     height = int(512)
     dsize = (width, height)
@@ -62,7 +61,7 @@ def overlap_3_chanels(gt, pred, input):
 
     print(tp.min(), tp.max(), fp.min(), fp.max(), fn.min(), fn.max())
 
-    img = np.zeros((512, 512, 3), np.float32)
+    img = np.zeros((size[0], size[1], 3), np.float32)
     img[:, :, 1] = tp
     img[:, :, 2] = fp
     img[:, :, 0] = fn
@@ -71,8 +70,7 @@ def overlap_3_chanels(gt, pred, input):
     print(img.min(), img.max(), img.dtype, img.shape)
     print(input.min(), input.max(), input.dtype, input.shape)
     dst = cv2.addWeighted(input, 0.7, img, 0.3, 0)
-    # plt.imshow(img)
-    # plt.show()
+ 
 
     return dst
 
@@ -221,25 +219,16 @@ def main():
     f = open(f"{path}/yaml_config.yml", "w+")
     f.write(yml_data)
     f.close()
-    path_construct = glob.glob(r"E:\__RCA_bif_detection\data\*")
-
-    # path_list=create_dataset_csv(path_construct)
-    #dataset_df = pd.DataFrame(path_list)
-
-    #dataset_df = split_dataset(dataset_df, split_per=config['data']['split_per'], seed=1)
-    #print (dataset_df.head(3))
 
     dataset_df = pd.read_csv(config['data']['dataset_csv'])
     test_df = dataset_df.loc[dataset_df["subset"] == "test", :]
     test_ds = AngioClass(test_df, img_size=config["data"]["img_size"])
-    # print(test_ds[0])
+
 
     test_loader = torch.utils.data.DataLoader(
         test_ds, batch_size=config["train"]["bs"], shuffle=False)
 
     network = torch.load(config['data']['model'])
-
-    # print(f"# Test: {len(test_ds)}")
 
     test_set_CSV = test(network, test_loader, test_df,
                         thresh=config['test']['threshold'])
@@ -293,36 +282,19 @@ def main():
         x = x.type(torch.cuda.FloatTensor)
         print(x.shape)
         y_pred = network(x.to(device='cuda:0'))
-       # print( y_pred.shape)
-       # print (len(x),x.shape)
+
 
         for step, (input, gt, pred) in enumerate(zip(x, y, y_pred)):
-            #print (pred.shape, img.shape,gt.shape)
-            # print(pred.shape)
             pred = F.softmax(pred, dim=0)[1].detach().cpu().numpy()
-            # print(pred.shape, pred.min(), pred.max())
+
             pred[pred > config['test']['threshold']] = 1
             pred[pred <= config['test']['threshold']] = 0
 
             np_input = input.cpu().detach().numpy()
             np_gt = gt.cpu().detach().numpy()
+            
+            overlap_colors = overlap_3_chanels(np_gt[0], pred, np_input[0],config['data']['img_size'])
 
-            #print (pred.shape,input.shape)
-            #print(np_gt.dtype,np_gt.shape, np_gt.min(),np_gt.max())
-            # dst=overlap(np_input[0],pred)
-            overlap_colors = overlap_3_chanels(np_gt[0], pred, np_input[0])
-
-            # plt.axis('off')
-            # plt.title('Prediction ')
-            # plt.imshow(pred, cmap='gray')
-            # plt.savefig(f"{path}\\Măști_frame{batch_index}_{step}.png")
-
-            # plt.title('Overlap ')
-            # plt.imshow(np_input[0],cmap='gray',interpolation=None)
-            # plt.imshow(pred,cmap='jet',interpolation=None,alpha=0.8)
-            # plt.savefig(f"{path}\\OVERLAP_frame{batch_index}_{step}.png")
-
-            #cv2.imwrite(os.path.join(path, 'OVERLAP'+'_'+str(batch_index)+'_'+str(step)+'.png'),dst)
             overlap_path.append(os.path.join(overlap_pred_path, 'OVERLAP_Colored'+'_'+str(test_set_CSV['Patient'][index[step]])+'_'+str(
                 test_set_CSV['Acquistion'][index[step]])+'-'+str(test_set_CSV['Frame'][index[step]])+'.png'))
             prediction_path.append(os.path.join(overlap_pred_path, 'PREDICTIE'+'_'+str(test_set_CSV['Patient'][index[step]])+'_'+str(
