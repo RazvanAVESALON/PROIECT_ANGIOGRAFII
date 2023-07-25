@@ -149,12 +149,6 @@ class RegersionClass(torch.utils.data.Dataset):
         tensor_x = torch.from_numpy(img_3d)
         
       
-            
-    
-        
-   
-      
-      
         #print (tensor_x.min(),tensor_y.min(),tensor_x.max(),tensor_y.max())
        
         #plt.imshow(tensor_x, cmap="gray")
