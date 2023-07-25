@@ -8,14 +8,14 @@ import cv2
 def pixels2mm(coordonate_pixel_list, magnification_factor, image_spacing):
 
     coords_mm = {'x': [], 'y': []}
+    #citire listă de coordonate 
     for x, y in zip(coordonate_pixel_list['x'], coordonate_pixel_list['y']):
-        #print ('x,y',x,y)
-        # print(type(x),type(y))
-
+        
+        # aplicarea formulei de transformare pixeli -> milimetri
         img_space = np.array([image_spacing[0], image_spacing[1]])
         mm = np.array([x, y]) * img_space / magnification_factor
-        # print("Imgspace",image_spacing,'magfactor',magnification_factor)
-        # print('mm',mm)
+
+        # creare unei liste noi 
         coords_mm['x'].append(mm[0])
         coords_mm['y'].append(mm[1])
 
@@ -36,10 +36,13 @@ def mm2pixels(coordonate_mm_list, magnification_factor, image_spacing):
 
 def calcuate_distance(gt_coordonates, pred_coordonates):
     distance = []
+    # verificare dacă există predicție
     if len(gt_coordonates['x']) <= 1:
-        # print(gt_coordonates,pred_coordonates)
+    
+        # citire listă 
         for x, y in zip(pred_coordonates['x'], pred_coordonates['y']):
 
+            # aplicarea formulei de distanță 
             print(gt_coordonates['x'], gt_coordonates['y'])
             dx = gt_coordonates['x']-x
             dy = gt_coordonates['y']-y
@@ -50,7 +53,8 @@ def calcuate_distance(gt_coordonates, pred_coordonates):
 
         print(distance)
     else:
-        distance.append(0)
+        distance.append("Can't calculate Distance For this frame ( No prediction )")
+        
 
     return distance
 
