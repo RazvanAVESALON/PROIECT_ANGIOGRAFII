@@ -29,21 +29,28 @@ class AngioClass(torch.utils.data.Dataset):
         return patient, acquisition, frame, header, annotations
 
     def crop_colimator(self, frame, gt, info):
+        # schimbarea tipului de date
         img = frame.astype(np.float32)
         in_min = 0
         in_max = 2 ** info['BitsStored'] - 1
         out_min = 0
         out_max = 255
+        
         if in_max != out_max:
             img = img.astype(np.float32)
+            # aplicare normalizare 
             img = (img - in_min) * ((out_max - out_min) /
                                     (in_max - in_min)) + out_min
             img = np.rint(img)
+            #schimbarea tipului de date 
             img.astype(np.uint8)
 
-        # crop collimator
+        # marginile imaginii fără colimator collimator
         img_edge = info['ImageEdges']
+        
+        # eliminarea colimatorului 
         img_c = img[..., img_edge[2]:img_edge[3]+1, img_edge[0]:img_edge[1]+1]
+        # aplicare identică pe masca de segmentare
         new_gt = gt[..., img_edge[2]:img_edge[3]+1, img_edge[0]:img_edge[1]+1]
 
         return img_c, new_gt
@@ -55,12 +62,17 @@ class AngioClass(torch.utils.data.Dataset):
         with open(self.dataset_df['angio_loader_header'][idx]) as f:
             angio_loader = json.load(f)
 
+        #deschiderea adnotării
         with open(self.dataset_df['annotations_path'][idx]) as f:
-            clipping_points = json.load(f)
+            clipping_points = json.load(f)                         
 
+        #crearea unei imagini negre
         target = np.zeros(img.shape, dtype=np.uint8)
+        #desenarea  punctului de bifurcație 
         target[frame_param] = cv2.circle(target[frame_param], [clipping_points[str(
             frame_param)][1], clipping_points[str(frame_param)][0]], 8, [255, 255, 255], -1)
+        
+    
 
         croped_colimator_img, croped_colimator_gt = self.crop_colimator(
             new_img, target[frame_param], angio_loader)
