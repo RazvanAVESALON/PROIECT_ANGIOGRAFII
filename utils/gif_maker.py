@@ -1,12 +1,14 @@
 import imageio
 import pathlib
-filenames=r"D:\ai intro\Angiografii\PROIECT_ANGIOGRAFII\Experiment_Dice_index11282022_1227\Test12222022_1347\OVERLAP_Colored_0d2e685e8a404667b62dd47cc7b728c3_92408191-1.png"
-path=r"D:\ai intro\Angiografii\PROIECT_ANGIOGRAFII\Experiment_Dice_index11282022_1227\Test12222022_1347\OVERLAP_Colored_0d2e685e8a404667b62dd47cc7b728c3_92408191-2.png"
+import numpy as np 
+path=r"E:\__RCA_bif_detection\data\00cca518a10d41adb9476aefc38a0b69\40117765\frame_extractor_frames.npz"
 images = []
 
-images.append(imageio.imread(filenames))
-images.append(imageio.imread(path))
+img=np.load(path)['arr_0']
+print (img.shape)
+for frame in range(14) :
+    images.append(img[frame])
 cale=pathlib.Path.cwd()
 kargs = { 'duration': 1}
 
-imageio.mimsave(exportname, images,'GIF',**kargs )
+imageio.mimsave("ex.gif", images,'GIF',**kargs )
