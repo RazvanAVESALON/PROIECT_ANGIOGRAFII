@@ -2,11 +2,11 @@ import math
 import numpy as np  
 def calculate_distance(gt_coordonates , pred_coordonates):
     
-    
+    # verificare predicție
     if len(pred_coordonates) > 0:
         # print(gt_coordonates,pred_coordonates)
         
-
+        # calculare distanța 
         dx = gt_coordonates[0]-pred_coordonates[0]
         dy = gt_coordonates[1]-pred_coordonates[1]
 
